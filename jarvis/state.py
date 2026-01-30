@@ -9,3 +9,4 @@ audio_queue = queue.Queue()    # Audio from TTS -> Speakers
 # The "Mute Switch"
 # We use a primitive boolean for speed, protected by the Python GIL
 IS_SPEAKING = False
+IS_PROCESSING = False

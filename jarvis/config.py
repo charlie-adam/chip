@@ -1,47 +1,63 @@
 import os
 import sys
 
-# API Keys
+from dotenv import load_dotenv
+
+load_dotenv()
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.abspath("credentials.json")
 
 if not OPENAI_API_KEY or not DEEPGRAM_API_KEY:
     print("ERROR: Please set OPENAI_API_KEY and DEEPGRAM_API_KEY.")
     sys.exit(1)
 
-# Audio Settings
 SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
 LLM_MODEL = "gpt-4o" #5 nano is really slow for some reason
 TTS_VOICE = "aura-helios-en"
+SILENCE_THRESHOLD = 1.5
 
 MCP_SERVER_COMMAND = "uv" 
 MCP_SERVER_ARGS = ["run", "jarvis/file_server.py"]
-
+PERSONAL_INFO = {
+    "name": "Charlie",
+    "role": "Software Developer @ Dappers Software",
+    "preferences": [
+        "Basketball",
+        "Coding"
+    ]
+}
 
 TARGET_FOLDER = os.path.abspath(".")
 SYSTEM_PROMPT = f"""
-You are Jarvis, a highly capable AI assistant with direct access to the user's local filesystem and a cloud-hosted browser via Browserbase.
-
+You are Jarvis, a highly capable AI assistant with direct access to the user's local filesystem and google workspace.
+ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, code blocks or lists
 ### Capabilities:
 1. **Filesystem**: You can read, write, and list files in the current project directory. Use this to retrieve logs, configuration, or local data.
-2. **Browserbase**: You have a browser powered by Stagehand. 
-    - Use 'browserbase_stagehand_navigate' to go to a URL.
-    - Use 'browserbase_stagehand_act' to perform actions like "click the login button" or "type 'weather in London' into the search bar". 
-    - Use 'browserbase_stagehand_observe' to see what elements are available to interact with.
-    - Use 'browserbase_stagehand_extract' to get specific structured data from a page.
+2. **Google Workspace**: You can access Google Docs, Calendar, and Drive to read and write documents, calendars, and manage files.
 
 ### Operational Guidelines:
-- **Conciseness**: Your spoken responses (via TTS) should be brief and helpful. Avoid long technical explanations unless asked.
+- **Conciseness**: Your spoken responses (via TTS) should be brief and helpful. Avoid long technical explanations unless asked. (Keep it under 2 sentences.)
 - **Error Handling**: If a file is missing or a website fails to load, explain why and suggest an alternative.
 - **Tool Chaining**: You can use multiple tools in a single turn. For example, read a local .txt file for a list of URLs, then navigate to each one.
 - **Browser State**: The browser session persists. You do not need to re-login if you are already in a session.
-- **Response Format**: Always respond in human speakable language, dont use markdown, em dashse, code blocks or lists.
 
 ### Tone:
 Professional, slightly witty, and efficient. You are a peer-level collaborator, not just a script runner.
+
+Wait for the user to finish their full thought. If a sentence seems incomplete, acknowledge that you are listening but do not process the final answer until the user provides the rest of the context.
+
+User info to keep in mind:
+Name: {PERSONAL_INFO['name']}
+Role: {PERSONAL_INFO['role']}
+Preferences: {', '.join(PERSONAL_INFO['preferences'])}
 """
+
+
 
 ALLOWED_FS_PATH = os.path.abspath(".")
 
@@ -53,5 +69,14 @@ MCP_SERVERS = {
     "filesystem": {
         "command": "npx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", os.path.abspath(".")]
+    },
+    "workspace": {
+        "command": "node",
+        "args": [
+            os.path.abspath("workspace-extension/workspace-server/dist/index.js")
+        ],
+        "env": {
+            "GOOGLE_APPLICATION_CREDENTIALS": os.path.abspath("credentials.json")
+        }
     }
 }

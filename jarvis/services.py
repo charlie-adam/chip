@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sys
 import requests
 import websockets
 import re
@@ -7,9 +8,8 @@ from openai import AsyncOpenAI
 import config
 import state
 
-# --- STT (Deepgram WebSocket) ---
 async def start_deepgram_stt():
-    url = f"wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={config.SAMPLE_RATE_MIC}&model=nova-2&smart_format=true&endpointing=500"
+    url = f"wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={config.SAMPLE_RATE_MIC}&model=nova-2&smart_format=true&endpointing=true"
     headers = {"Authorization": f"Token {config.DEEPGRAM_API_KEY}"}
 
     try:
@@ -29,64 +29,97 @@ async def start_deepgram_stt():
                         await ws.send(data)
 
                 async def receiver():
+                    buffer = []
+                    last_activity = asyncio.get_event_loop().time()
+                    
+                    TURN_TIMEOUT = config.SILENCE_THRESHOLD
+
+                    async def flush_loop():
+                        nonlocal last_activity
+                        while True:
+                            await asyncio.sleep(0.1)
+                            
+                            silence_duration = asyncio.get_event_loop().time() - last_activity
+                            
+                            if buffer and silence_duration > TURN_TIMEOUT:
+                                full_text = " ".join(buffer).strip()
+                                buffer.clear()
+                                
+                                if full_text:
+                                    sys.stdout.write("\r\033[K")
+                                    print(f"[USER] {full_text}")
+                                    await state.input_queue.put(f"[USER] {full_text}")
+                            
+                            elif buffer and silence_duration > 0.5:
+                                remaining = round(TURN_TIMEOUT - silence_duration, 1)
+                                sys.stdout.write(f"\r[WAITING {remaining}s] {' '.join(buffer)}")
+                                sys.stdout.flush()
+
+                    asyncio.create_task(flush_loop())
+
                     async for msg in ws:
                         res = json.loads(msg)
                         if 'channel' in res:
-                            transcript = res['channel']['alternatives'][0]['transcript']
-                            if transcript and res['is_final']:
-                                if not state.IS_SPEAKING:
-                                    print(f"\r[USER] {transcript}")
-                                    await state.input_queue.put(f"[USER] {transcript}")
+                            alt = res['channel']['alternatives'][0]
+                            transcript = alt['transcript'].strip()
+                            
+                            if transcript:
+                                last_activity = asyncio.get_event_loop().time()
 
+                                if res.get('is_final'):
+                                    buffer.append(transcript)
+                                else:
+                                    # Just visual feedback for interim results
+                                    current_text = " ".join(buffer) + " " + transcript
+                                    sys.stdout.write(f"\r[LISTENING] {current_text}")
+                                    sys.stdout.flush()
+                        
                 await asyncio.gather(sender(), receiver())
         except Exception as e:
             print(f"[ERROR] Deepgram Disconnected: {e}. Reconnecting in 2s...")
             await asyncio.sleep(2)
-
+            
 # --- TTS (The Voice Flow Fix) ---
 async def stream_tts(text_iterator):
     buffer = ""
     MIN_CHUNK_SIZE = 50 
     
-    # --- HELPER: Handle both Async Generators and Standard Lists ---
     async def content_generator():
         if hasattr(text_iterator, '__aiter__'):
-            # It is an async generator (OpenAI Stream)
             async for item in text_iterator:
                 yield item
         else:
-            # It is a standard list/iterator (Static Text)
             for item in text_iterator:
                 yield item
 
-    # --- MAIN LOOP ---
     async for chunk in content_generator():
         buffer += chunk
-        
-        # Only check for splitting if we have enough text OR a newline
         if len(buffer) > MIN_CHUNK_SIZE or "\n" in buffer:
-            
-            # Look for a sentence ending [.?!] followed by a space
             parts = re.split(r'(?<=[.?!])\s+', buffer, maxsplit=1)
-            
             if len(parts) > 1:
                 sentence, buffer = parts[0], parts[1]
                 if sentence.strip():
                     await _fetch_audio(sentence)
 
-    # Flush whatever is left at the end
     if buffer.strip():
         await _fetch_audio(buffer)
 
 async def _fetch_audio(text):
+    # Set global speaking flag to avoid Jarvis hearing himself
+    state.IS_SPEAKING = True
     url = f"https://api.deepgram.com/v1/speak?model={config.TTS_VOICE}&encoding=linear16&sample_rate=48000&container=none"
     headers = {
         "Authorization": f"Token {config.DEEPGRAM_API_KEY}",
         "Content-Type": "application/json"
     }
     
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: _request_stream(url, headers, text))
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, lambda: _request_stream(url, headers, text))
+    finally:
+        # Give a small buffer before allowing mic to listen again
+        await asyncio.sleep(0.5)
+        state.IS_SPEAKING = False
 
 def _request_stream(url, headers, text):
     with requests.post(url, headers=headers, json={"text": text}, stream=True) as r:
@@ -101,8 +134,8 @@ async def ask_llm(messages, tools=None):
     response = await client.chat.completions.create(
         model=config.LLM_MODEL,
         messages=messages,
-        tools=tools,
-        tool_choice="auto"
+        tools=tools if tools else None,
+        tool_choice="auto" if tools else None
     )
     return response.choices[0].message
 

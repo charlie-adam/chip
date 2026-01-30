@@ -66,6 +66,11 @@ async def main():
         while True:
             user_input = await state.input_queue.get()
             
+            if getattr(state, "IS_PROCESSING", False):
+                continue
+                
+            state.IS_PROCESSING = True
+            
             clean_text = user_input
             if user_input.startswith("[USER]"):
                 clean_text = user_input.replace("[USER] ", "")
@@ -74,45 +79,49 @@ async def main():
 
             messages.append({'role': 'user', 'content': clean_text})
 
-            msg = await services.ask_llm(messages, tools=all_tools)
-            
-            if msg.tool_calls:
-                messages.append(msg)
-                
-                for tc in msg.tool_calls:
-                    fname = tc.function.name
-                    fargs = json.loads(tc.function.arguments)
+            try:
+                while True:
+                    msg = await services.ask_llm(messages, tools=all_tools)
                     
-                    session = tool_to_session.get(fname)
-                    if session:
-                        print(f"[TOOL] Executing {fname}...")
-                        try:
-                            res = await session.call_tool(fname, fargs)
-                            tool_result = res.content[0].text
-                        except Exception as e:
-                            tool_result = f"Error: {str(e)}"
-                    else:
-                        tool_result = f"Error: Tool {fname} not found in any active session."
-                    
-                    messages.append({
-                        "tool_call_id": tc.id, 
-                        "role": "tool", 
-                        "name": fname, 
-                        "content": str(tool_result)
-                    })
+                    if not msg.tool_calls:
+                        if msg.content:
+                            print(f"[JARVIS] {msg.content}")
+                            # Send final response to TTS
+                            await services.stream_tts(iter([msg.content]))
+                            messages.append(msg)
+                        break
 
-                final_response = await services.ask_llm(messages, tools=all_tools)
-                if final_response.content:
-                    print(f"[JARVIS] {final_response.content}")
-                    await services.stream_tts(iter([final_response.content]))
-                    
-                    messages.append(final_response)
-            
-            else:
-                if msg.content:
-                    asyncio.create_task(services.stream_tts(iter([msg.content])))
-                    print(f"[JARVIS] {msg.content}")
+                    # Handle Tool Calls
                     messages.append(msg)
+                    for tc in msg.tool_calls:
+                        fname = tc.function.name
+                        fargs = json.loads(tc.function.arguments)
+                        
+                        session = tool_to_session.get(fname)
+                        if session:
+                            print(f"[TOOL] Executing {fname}...")
+                            try:
+                                res = await session.call_tool(fname, fargs)
+                                tool_result = ""
+                                for content in res.content:
+                                    if hasattr(content, 'text'):
+                                        tool_result += content.text
+                                    else:
+                                        tool_result += str(content)
+                            except Exception as e:
+                                tool_result = f"Error: {str(e)}"
+                        else:
+                            tool_result = f"Error: Tool {fname} not found."
+                        
+                        messages.append({
+                            "tool_call_id": tc.id, 
+                            "role": "tool", 
+                            "name": fname, 
+                            "content": str(tool_result)
+                        })
+                    # Loop continues to ask_llm with the tool results
+            finally:
+                state.IS_PROCESSING = False
 
 if __name__ == "__main__":
     try:
