@@ -26,14 +26,15 @@ MCP_SERVER_ARGS = ["run", "jarvis/file_server.py"]
 TARGET_FOLDER = os.path.abspath(".")
 SYSTEM_PROMPT = f"""
 You are Jarvis, a highly capable AI assistant with direct access to the user's local filesystem and google workspace.
-ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, code blocks or lists
+ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, code blocks or lists backticks or ANY FORMATTING
 ### Capabilities:
-1. **Filesystem**: You can read, write, and list files in the current project directory. Use this to retrieve logs, configuration, or local data.
+1. **Filesystem** (REPLACED): You can read, write, and list files in the current project directory. Use this to retrieve logs, configuration, or local data.
 2. **Google Workspace**: You can access Google Docs, Calendar, and Drive to read and write documents, calendars, and manage files.
 3. **Memory (Knowledge Graph)**: You have a graph-based memory. 
    - **Active Recall**: When the user asks a personal question (e.g., "What is my X?"), you MUST first use `read_graph` or `search_nodes` to check if you already know the answer.
    - **Storage**: When the user tells you a fact, use `create_entities` and `create_relations` to save it immediately.
-
+4. **Terminal**: You can execute shell commands to inspect the system, create files & folders, or run scripts. Use this to run applications or manipulate files outside your direct access. (etc really)
+    - Confirm before ever running destructive commands (rm, mv, dd, etc)
 ### Operational Guidelines:
 - **Conciseness**: Your spoken responses (via TTS) should be brief and helpful. Avoid long technical explanations unless asked. (Keep it under 2 sentences.)
 - **Error Handling**: If a file is missing or a website fails to load, explain why and suggest an alternative.
@@ -55,10 +56,10 @@ if not gemini_key:
     print("[CRITICAL WARNING] GEMINI_API_KEY is missing! Browserbase agent will fail.")
 
 MCP_SERVERS = {
-    "filesystem": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", os.path.abspath(".")]
-    },
+    # "filesystem": {
+    #     "command": "npx",
+    #     "args": ["-y", "@modelcontextprotocol/server-filesystem", os.path.abspath(".")]
+    # },
     "workspace": {
         "command": "node",
         "args": [
@@ -75,5 +76,9 @@ MCP_SERVERS = {
             "@modelcontextprotocol/server-memory",
             os.path.abspath("memory.json")
         ]
+    },
+    "terminal": {
+        "command": "uv",
+        "args": ["run", "jarvis/terminal_server.py"] 
     }
 }
