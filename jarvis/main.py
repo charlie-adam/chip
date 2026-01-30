@@ -1,0 +1,121 @@
+import asyncio
+import sys
+import threading
+import json
+import os
+from contextlib import AsyncExitStack
+
+from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+
+import config
+import state
+import audio_engine
+import services
+import tools_handler
+
+def console_listener(loop):
+    while True:
+        try:
+            text = sys.stdin.readline()
+            if text.strip():
+                asyncio.run_coroutine_threadsafe(state.input_queue.put(text.strip()), loop)
+        except: break
+
+async def main():
+    mic_id = audio_engine.select_microphone()
+    engine = audio_engine.AudioEngine()
+    engine.start() 
+    
+    mic = audio_engine.Microphone()
+    mic.start(mic_id)
+    
+    asyncio.create_task(services.start_deepgram_stt())
+    
+    tm = tools_handler.ToolManager(config.MCP_SERVERS)
+    all_tools = []
+    tool_to_session = {}
+
+    async with AsyncExitStack() as stack:
+        for server_name in config.MCP_SERVERS:
+            print(f"[SYSTEM] Connecting to {server_name}...")
+            params = tm.get_server_params(server_name)
+            
+            try:
+                read, write = await stack.enter_async_context(stdio_client(params))
+                session = await stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+                
+                mcp_tools_list = await session.list_tools()
+                formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
+                
+                for t in mcp_tools_list.tools:
+                    tool_to_session[t.name] = session
+                
+                all_tools.extend(formatted_tools)
+            except Exception as e:
+                print(f"[ERROR] Failed to connect to {server_name}: {e}")
+
+        print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools across {len(config.MCP_SERVERS)} servers.")
+
+        loop = asyncio.get_running_loop()
+        threading.Thread(target=console_listener, args=(loop,), daemon=True).start()
+
+        messages = [{'role': 'system', 'content': config.SYSTEM_PROMPT}]
+
+        while True:
+            user_input = await state.input_queue.get()
+            
+            clean_text = user_input
+            if user_input.startswith("[USER]"):
+                clean_text = user_input.replace("[USER] ", "")
+            else:
+                print(f"[USER (Text)] {clean_text}")
+
+            messages.append({'role': 'user', 'content': clean_text})
+
+            msg = await services.ask_llm(messages, tools=all_tools)
+            
+            if msg.tool_calls:
+                messages.append(msg)
+                
+                for tc in msg.tool_calls:
+                    fname = tc.function.name
+                    fargs = json.loads(tc.function.arguments)
+                    
+                    session = tool_to_session.get(fname)
+                    if session:
+                        print(f"[TOOL] Executing {fname}...")
+                        try:
+                            res = await session.call_tool(fname, fargs)
+                            tool_result = res.content[0].text
+                        except Exception as e:
+                            tool_result = f"Error: {str(e)}"
+                    else:
+                        tool_result = f"Error: Tool {fname} not found in any active session."
+                    
+                    messages.append({
+                        "tool_call_id": tc.id, 
+                        "role": "tool", 
+                        "name": fname, 
+                        "content": str(tool_result)
+                    })
+
+                final_response = await services.ask_llm(messages, tools=all_tools)
+                if final_response.content:
+                    print(f"[JARVIS] {final_response.content}")
+                    await services.stream_tts(iter([final_response.content]))
+                    
+                    messages.append(final_response)
+            
+            else:
+                if msg.content:
+                    asyncio.create_task(services.stream_tts(iter([msg.content])))
+                    print(f"[JARVIS] {msg.content}")
+                    messages.append(msg)
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n[SYSTEM] Shutdown.")
