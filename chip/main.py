@@ -107,8 +107,8 @@ async def main():
                     # 2. Extract Content (First Candidate)
                     # The new SDK response object is cleaner
                     if not response.candidates:
-                         print("[ERROR] No candidates returned from Gemini.")
-                         break
+                        print("[ERROR] No candidates returned from Gemini.")
+                        break
 
                     candidate = response.candidates[0]
                     model_content = candidate.content
@@ -138,7 +138,7 @@ async def main():
                             tool_result_str = ""
                             
                             if session:
-                                print(f"[TOOL] Executing {fname}...")
+                                print(f"[TOOL] Executing {fname} with args {fargs}")
                                 try:
                                     res = await session.call_tool(fname, fargs)
                                     # MCP Response handling
