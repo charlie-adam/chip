@@ -60,7 +60,6 @@ async def main():
                 await session.initialize()
                 
                 mcp_tools_list = await session.list_tools()
-                # Get OpenAI format tools
                 formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
                 
                 for t in mcp_tools_list.tools:
@@ -75,7 +74,6 @@ async def main():
         loop = asyncio.get_running_loop()
         threading.Thread(target=console_listener, args=(loop,), daemon=True).start()
 
-        # History: List of types.Content or dicts
         history = []
 
         while True:
@@ -90,93 +88,78 @@ async def main():
             if not user_input.startswith("[USER]"):
                 print(f"[USER (Text)] {clean_text}")
 
-            # Add User Message to History
             history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
 
-            is_first_tool_pass = True 
-
             try:
-                while True:
-                    # 1. Call Gemini
+                # Limit the loop to prevent infinite tool loops
+                for _ in range(5): 
                     response = await services.ask_llm(
                         history, 
                         system_instruction=config.SYSTEM_PROMPT, 
                         tools=all_tools
                     )
                     
-                    # 2. Extract Content (First Candidate)
-                    # The new SDK response object is cleaner
                     if not response.candidates:
                         print("[ERROR] No candidates returned from Gemini.")
                         break
 
                     candidate = response.candidates[0]
-                    model_content = candidate.content
+                    # 1. Add the FULL model turn to history immediately to preserve thought_signature
+                    history.append(candidate.content)
+
+                    # 2. Process parts for Text (TTS) and collect Tool Calls
+                    tool_calls = []
                     
-                    # 3. Process Parts
-                    has_tool_calls = False
-                    model_parts = []
-                    
-                    # Iterate through the model's returned parts
-                    for part in model_content.parts:
-                        model_parts.append(part) # Keep track of what the model said/requested
-                        
-                        # Handle Function Calls
-                        if part.function_call:
-                            has_tool_calls = True
-                            fn = part.function_call
-                            fname = fn.name
-                            fargs = fn.args # args is already a dict in new SDK
-                            
-                            if is_first_tool_pass:
-                                filler = random.choice(FILLERS)
-                                print(f"[CHIP (Filler)] {filler}")
-                                await services.stream_tts(iter([filler]))
-                                is_first_tool_pass = False
-                            
-                            session = tool_to_session.get(fname)
-                            tool_result_str = ""
-                            
-                            if session:
-                                print(f"[TOOL] Executing {fname} with args {fargs}")
-                                try:
-                                    res = await session.call_tool(fname, fargs)
-                                    # MCP Response handling
-                                    for content in res.content:
-                                        if hasattr(content, 'text'):
-                                            tool_result_str += content.text
-                                        else:
-                                            tool_result_str += str(content)
-                                except Exception as e:
-                                    tool_result_str = f"Error: {str(e)}"
-                            else:
-                                tool_result_str = f"Error: Tool {fname} not found."
-                            
-                            # Add the function call (Model) to history
-                            history.append(types.Content(role="model", parts=model_parts))
-                            model_parts = [] # Reset for next turn or next part
-                            
-                            # Add the function response (User/Function) to history
-                            # New SDK prefers explicit function_response part
-                            response_part = types.Part.from_function_response(
-                                name=fname,
-                                response={"result": tool_result_str}
-                            )
-                            history.append(types.Content(role="user", parts=[response_part]))
-                            
-                        # Handle Text
-                        elif part.text:
+                    for part in candidate.content.parts:
+                        if part.text:
                             print(f"[CHIP] {part.text}")
                             await services.stream_tts(iter([part.text]))
+                        
+                        if part.function_call:
+                            tool_calls.append(part.function_call)
 
-                    # If no tools were called, we are finished with this turn
-                    if not has_tool_calls:
-                        # Add final model text to history
-                        if model_parts:
-                            history.append(types.Content(role="model", parts=model_parts))
+                    # 3. If no tools, we are done with this turn
+                    if not tool_calls:
                         break
                     
-                    # If tools WERE called, the loop continues (Gemini sees the response in history)
+                    # 4. Handle Tool Calls
+                    filler = random.choice(FILLERS)
+                    print(f"[CHIP (Filler)] {filler}")
+                    await services.stream_tts(iter([filler]))
+
+                    response_parts = []
+                    
+                    for fn in tool_calls:
+                        fname = fn.name
+                        fargs = fn.args 
+                        
+                        session = tool_to_session.get(fname)
+                        tool_result_str = ""
+                        
+                        if session:
+                            print(f"[TOOL] Executing {fname} with args {fargs}")
+                            try:
+                                res = await session.call_tool(fname, fargs)
+                                # MCP returns a list of content, usually TextContent or ImageContent
+                                for content in res.content:
+                                    if hasattr(content, 'text'):
+                                        tool_result_str += content.text
+                                    else:
+                                        tool_result_str += str(content)
+                            except Exception as e:
+                                tool_result_str = f"Error: {str(e)}"
+                        else:
+                            tool_result_str = f"Error: Tool {fname} not found."
+
+                        # Create the function response part
+                        response_parts.append(types.Part.from_function_response(
+                            name=fname,
+                            response={"result": tool_result_str}
+                        ))
+
+                    # 5. Append ALL tool results as a single USER turn
+                    history.append(types.Content(role="user", parts=response_parts))
+                    # The loop continues now, sending the results back to the LLM
 
             except Exception as e:
                 print(f"[ERROR] LLM Loop: {e}")
