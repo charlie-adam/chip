@@ -139,6 +139,7 @@ class CompatToolCall:
 
 class CompatMessage:
     def __init__(self, content, tool_calls=None):
+        self.role = "assistant"
         self.content = content
         self.tool_calls = tool_calls
 
@@ -146,11 +147,21 @@ def _convert_to_google_messages(messages):
     google_contents = []
     
     for m in messages:
-        role = m["role"]
-        content = m.get("content")
-        
+        # 1. Normalize 'm' to be a dict-like structure to handle both dicts and CompatMessage objects
+        if isinstance(m, dict):
+            role = m.get("role")
+            content = m.get("content")
+            tool_calls = m.get("tool_calls")
+            name = m.get("name")
+        else:
+            role = getattr(m, "role", "assistant")
+            content = getattr(m, "content", None)
+            tool_calls = getattr(m, "tool_calls", None)
+            name = getattr(m, "name", None)
+
+        # 2. Map Roles to Google API
         if role == "system":
-            continue 
+            continue # System prompt handled in config
         elif role == "assistant":
             role = "model"
         elif role == "tool":
@@ -158,24 +169,33 @@ def _convert_to_google_messages(messages):
         
         parts = []
         
-        if content and role != "user" and not m.get("tool_calls"): 
+        if content and role != "user" and not tool_calls: 
              parts.append(Part(text=content))
         elif content and role == "user":
              parts.append(Part(text=content))
 
-        if "tool_calls" in m and m["tool_calls"]:
-            for tc in m["tool_calls"]:
+        if tool_calls:
+            for tc in tool_calls:
+                # Handle CompatToolCall object vs Dict
+                if isinstance(tc, dict):
+                    # Should generally not happen if using CompatMessage, but safety fallback
+                    f_name = tc.get("function", {}).get("name")
+                    f_args = json.loads(tc.get("function", {}).get("arguments", "{}"))
+                else:
+                    f_name = tc.function.name
+                    f_args = json.loads(tc.function.arguments)
+
                 parts.append(Part(
                     function_call={
-                        "name": tc["name"], 
-                        "args": json.loads(tc["content"]) if isinstance(tc["content"], str) else {} 
+                        "name": f_name, 
+                        "args": f_args 
                     }
                 ))
         
-        if m.get("role") == "tool":
-            parts.append(Part(
+        if role == "user" and name:
+             parts.append(Part(
                 function_response={
-                    "name": m.get("name"),
+                    "name": name,
                     "response": {"result": content} 
                 }
             ))
@@ -191,10 +211,16 @@ async def ask_llm(messages, tools=None):
         funcs = []
         for t in tools:
             f_schema = t['function']
+            
+            clean_params = f_schema.get('parameters', {}).copy()
+            if '$schema' in clean_params:
+                del clean_params['$schema']
+            # ------------------------------------
+
             funcs.append(FunctionDeclaration(
                 name=f_schema['name'],
                 description=f_schema.get('description'),
-                parameters=f_schema.get('parameters')
+                parameters=clean_params 
             ))
         
         google_tools = [Tool(
