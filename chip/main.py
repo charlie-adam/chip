@@ -85,7 +85,7 @@ async def main():
                     
                     if not msg.tool_calls:
                         if msg.content:
-                            print(f"[JARVIS] {msg.content}")
+                            print(f"[CHIP] {msg.content}")
                             # Send final response to TTS
                             await services.stream_tts(iter([msg.content]))
                             messages.append(msg)

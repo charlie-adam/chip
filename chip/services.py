@@ -105,7 +105,7 @@ async def stream_tts(text_iterator):
         await _fetch_audio(buffer)
 
 async def _fetch_audio(text):
-    # Set global speaking flag to avoid Jarvis hearing himself
+    # Set global speaking flag to avoid Chip hearing himself
     state.IS_SPEAKING = True
     url = f"https://api.deepgram.com/v1/speak?model={config.TTS_VOICE}&encoding=linear16&sample_rate=48000&container=none"
     headers = {
@@ -128,7 +128,7 @@ def _request_stream(url, headers, text):
                 state.audio_queue.put(chunk)
 
 # --- LLM ---
-client = AsyncOpenAI(api_key=config.OPENAI_API_KEY)
+client = AsyncOpenAI(api_key=config.GEMINI_API_KEY,base_url="https://generativelanguage.googleapis.com/v1beta/openai/")
 
 async def ask_llm(messages, tools=None):
     response = await client.chat.completions.create(
@@ -147,7 +147,7 @@ async def stream_llm_response(messages):
     )
     async def generator():
         full_text = ""
-        print("[JARVIS] ", end="", flush=True)
+        print("[CHIP] ", end="", flush=True)
         async for chunk in stream:
             if chunk.choices[0].delta.content:
                 text = chunk.choices[0].delta.content

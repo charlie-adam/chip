@@ -7,25 +7,31 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.abspath("credentials.json")
 
-if not OPENAI_API_KEY or not DEEPGRAM_API_KEY:
-    print("ERROR: Please set OPENAI_API_KEY and DEEPGRAM_API_KEY.")
-    sys.exit(1)
+# if not OPENAI_API_KEY or not DEEPGRAM_API_KEY:
+#     print("ERROR: Please set OPENAI_API_KEY and DEEPGRAM_API_KEY.")
+#     sys.exit(1)
 
+if not GEMINI_API_KEY or not DEEPGRAM_API_KEY:
+    print("ERROR: Please set GEMINI_API_KEY and DEEPGRAM_API_KEY.")
+    sys.exit(1)
+    
 SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
-LLM_MODEL = "gpt-4o" #5 nano is really slow for some reason
+# LLM_MODEL = "gpt-4o" #5 nano is really slow for some reason
+LLM_MODEL = "gemini-3-flash-preview"
 TTS_VOICE = "aura-helios-en"
 SILENCE_THRESHOLD = 1.5
 
 MCP_SERVER_COMMAND = "uv" 
-MCP_SERVER_ARGS = ["run", "jarvis/file_server.py"]
+MCP_SERVER_ARGS = ["run", "chip/file_server.py"]
 TARGET_FOLDER = os.path.abspath(".")
 SYSTEM_PROMPT = f"""
-You are Jarvis, a highly capable AI assistant with direct access to the user's local filesystem and google workspace.
+You are Chip, a highly capable AI assistant with direct access to the user's local filesystem and google workspace.
 ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, code blocks or lists backticks or ANY FORMATTING
 ### Capabilities:
 1. **Filesystem** (REPLACED): You can read, write, and list files in the current project directory. Use this to retrieve logs, configuration, or local data.
@@ -51,10 +57,6 @@ Wait for the user to finish their full thought. If a sentence seems incomplete, 
 
 ALLOWED_FS_PATH = os.path.abspath(".")
 
-gemini_key = os.getenv("GEMINI_API_KEY")
-if not gemini_key:
-    print("[CRITICAL WARNING] GEMINI_API_KEY is missing! Browserbase agent will fail.")
-
 MCP_SERVERS = {
     # "filesystem": {
     #     "command": "npx",
@@ -79,6 +81,6 @@ MCP_SERVERS = {
     },
     "terminal": {
         "command": "uv",
-        "args": ["run", "jarvis/terminal_server.py"] 
+        "args": ["run", "chip/terminal_server.py"] 
     }
 }
