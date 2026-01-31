@@ -118,7 +118,7 @@ async def main():
                         
                         session = tool_to_session.get(fname)
                         if session:
-                            print(f"[TOOL] Executing {fname} with args: {fargs}")
+                            print(f"[TOOL] Executing {fname}...")
                             try:
                                 res = await session.call_tool(fname, fargs)
                                 tool_result = ""
