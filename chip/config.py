@@ -23,8 +23,9 @@ SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
 # LLM_MODEL = "gpt-4o" #5 nano is really slow for some reason
+# LLM_MODEL = "gemini-flash-lite-latest"
 LLM_MODEL = "gemini-3-flash-preview"
-TTS_VOICE = "aura-helios-en"
+TTS_VOICE = "aura-2-callista-en"
 SILENCE_THRESHOLD = 1.5
 
 MCP_SERVER_COMMAND = "uv" 
@@ -41,6 +42,7 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
    - **Storage**: When the user tells you a fact, use `create_entities` and `create_relations` to save it immediately.
 4. **Terminal**: You can execute shell commands to inspect the system, create files & folders, or run scripts. Use this to run applications or manipulate files outside your direct access. (etc really)
     - Confirm before ever running destructive commands (rm, mv, dd, etc)
+5. **Spotify**: You can control Spotify playback, search for songs, adjust volume, and manage playlists.
 ### Operational Guidelines:
 - **Conciseness**: Your spoken responses (via TTS) should be brief and helpful. Avoid long technical explanations unless asked. (Keep it under 2 sentences.)
 - **Error Handling**: If a file is missing or a website fails to load, explain why and suggest an alternative.
@@ -82,5 +84,9 @@ MCP_SERVERS = {
     "terminal": {
         "command": "uv",
         "args": ["run", "chip/terminal_server.py"] 
+    },
+    "spotify": {
+        "command": "python",
+            "args": ["chip/spotify_server.py"]
     }
 }
