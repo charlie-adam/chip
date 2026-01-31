@@ -3,6 +3,7 @@ import sys
 import threading
 import json
 import os
+import random
 from contextlib import AsyncExitStack
 
 from mcp.client.stdio import stdio_client
@@ -13,6 +14,16 @@ import state
 import audio_engine
 import services
 import tools_handler
+
+FILLERS = [
+    "One moment, let me check that.",
+    "I'll have a quick look.",
+    "Just a second.",
+    "Processing that for you.",
+    "Let me see.",
+    "Checking on that.",
+    "On it."
+]
 
 def console_listener(loop):
     while True:
@@ -79,6 +90,8 @@ async def main():
 
             messages.append({'role': 'user', 'content': clean_text})
 
+            is_first_tool_pass = True 
+
             try:
                 while True:
                     msg = await services.ask_llm(messages, tools=all_tools)
@@ -86,12 +99,18 @@ async def main():
                     if not msg.tool_calls:
                         if msg.content:
                             print(f"[CHIP] {msg.content}")
-                            # Send final response to TTS
                             await services.stream_tts(iter([msg.content]))
                             messages.append(msg)
                         break
 
-                    # Handle Tool Calls
+                    
+                    if is_first_tool_pass:
+                        filler = random.choice(FILLERS)
+                        print(f"[CHIP (Filler)] {filler}")
+                        # Non-blocking TTS (fire and forget into the queue)
+                        await services.stream_tts(iter([filler]))
+                        is_first_tool_pass = False
+
                     messages.append(msg)
                     for tc in msg.tool_calls:
                         fname = tc.function.name
@@ -119,7 +138,6 @@ async def main():
                             "name": fname, 
                             "content": str(tool_result)
                         })
-                    # Loop continues to ask_llm with the tool results
             finally:
                 state.IS_PROCESSING = False
 
