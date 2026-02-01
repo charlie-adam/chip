@@ -4,7 +4,10 @@ import threading
 import json
 import os
 import random
+import subprocess
+import time  # Added for the delay
 from contextlib import AsyncExitStack
+from google.genai import types
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
@@ -14,23 +17,18 @@ from mcp.client.stdio import stdio_client
 from mcp import ClientSession
 from google.genai import types
 
-from chip.utils import config           # Was: import config
-from chip.core import state             # Was: import state
-from chip.audio import audio_engine     # Was: import audio_engine
-from chip.core import services          # Was: import services
-from chip.utils import tools_handler    # Was: import tools_handler
-from chip.core import context_manager   # Was: import context_manager
+from chip.utils import smalls
+from chip.utils import config
+from chip.core import state
+from chip.audio import audio_engine
+from chip.core import services
+from chip.utils import tools_handler
+from chip.core import context_manager
+
 FILLERS = [
-    "Working on it.",
-    "One moment.",
-    "Just a second.",
-    "Let me check.",
-    "Processing.",
-    "Getting that for you.",
-    "Hold on a moment.",
-    "I'll find out.",
-    "Let me see.",
-    "Checking now."
+    "Working on it.", "One moment.", "Just a second.", "Let me check.",
+    "Processing.", "Getting that for you.", "Hold on a moment.",
+    "I'll find out.", "Let me see.", "Checking now."
 ]
 
 def console_listener(loop):
@@ -41,7 +39,31 @@ def console_listener(loop):
                 asyncio.run_coroutine_threadsafe(state.input_queue.put(text.strip()), loop)
         except: break
 
+def restart_imcp():
+    """
+    1. Force kills iMCP and its server to clear any zombie states.
+    2. Relaunches the app.
+    3. Waits for it to be ready.
+    """
+    print("[SYSTEM] Restarting iMCP to ensure clean connection...")
+    
+    subprocess.run(["pkill", "-f", "iMCP"], stderr=subprocess.DEVNULL)
+    subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
+    
+    time.sleep(1) # Wait for death
+    
+    try:
+        subprocess.run(["open", "/Applications/iMCP.app"], check=True)
+        
+        print("[SYSTEM] iMCP launching... waiting 2s for initialization...")
+        time.sleep(2) 
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to launch iMCP: {e}")
+
 async def main():
+    restart_imcp()
+
     personality_text, last_summary = context_manager.load_context()
     
     full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### CURRENT PERSONALITY SETTINGS:\n{personality_text}\n\n### PREVIOUS SESSION MEMORY:\n{last_summary}"
@@ -60,32 +82,37 @@ async def main():
     tool_to_session = {}
     history = []
 
-    async with AsyncExitStack() as stack:
-        for server_name in config.MCP_SERVERS:
-            print(f"[SYSTEM] Connecting to {server_name}...")
-            params = tm.get_server_params(server_name)
-            try:
-                read, write = await stack.enter_async_context(stdio_client(params))
-                session = await stack.enter_async_context(ClientSession(read, write))
-                await session.initialize()
-                
-                mcp_tools_list = await session.list_tools()
-                formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
-                
-                for t in mcp_tools_list.tools:
-                    tool_to_session[t.name] = session
-                
-                all_tools.extend(formatted_tools)
-            except Exception as e:
-                print(f"[ERROR] Failed to connect to {server_name}: {e}")
+    try:
+        async with AsyncExitStack() as stack:
+            for server_name in config.MCP_SERVERS:
+                print(f"[SYSTEM] Connecting to {server_name}...")
+                params = tm.get_server_params(server_name)
+                try:
+                    read, write = await stack.enter_async_context(stdio_client(params))
+                    session = await stack.enter_async_context(ClientSession(read, write))
+                    await session.initialize()
+                    
+                    mcp_tools_list = await session.list_tools()
+                    
+                    for tool in mcp_tools_list.tools:
+                        if hasattr(tool, "inputSchema"):
+                            tool.inputSchema = smalls.clean_schema(tool.inputSchema)
 
-        print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
-        print(f"[SYSTEM] Loaded Personality: {personality_text[:30]}...")
+                    formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
+                    
+                    for t in mcp_tools_list.tools:
+                        tool_to_session[t.name] = session
+                    
+                    all_tools.extend(formatted_tools)
+                except Exception as e:
+                    print(f"[ERROR] Failed to connect to {server_name}: {e}")
 
-        loop = asyncio.get_running_loop()
-        threading.Thread(target=console_listener, args=(loop,), daemon=True).start()
+            print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
+            print(f"[SYSTEM] Loaded Personality: {personality_text[:30]}...")
 
-        try:
+            loop = asyncio.get_running_loop()
+            threading.Thread(target=console_listener, args=(loop,), daemon=True).start()
+
             while True:
                 user_input = await state.input_queue.get()
                 
@@ -171,9 +198,13 @@ async def main():
                 finally:
                     state.IS_PROCESSING = False
 
-        finally:
-            if history:
-                await context_manager.generate_and_save_summary(history, services)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        print("\n[SYSTEM] Stopping loop and closing tools...")
+
+    finally:
+        if history:
+            print("[SYSTEM] Tools closed. Generating session summary...")
+            await context_manager.generate_and_save_summary(history, services)
 
 if __name__ == "__main__":
     try:
