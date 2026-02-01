@@ -65,7 +65,7 @@ MCP_SERVERS = {
     "workspace": {
         "command": "node",
         "args": [
-            os.path.abspath("workspace-extension/workspace-server/dist/index.js")
+            os.path.expanduser("~/mcp-servers/google-workspace/workspace-server/dist/index.js")
         ],
         "env": {
             "GOOGLE_APPLICATION_CREDENTIALS": os.path.abspath("credentials.json")
