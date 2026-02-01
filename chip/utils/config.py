@@ -19,7 +19,7 @@ SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
 LLM_MODEL = "gemini-3-flash-preview"
-TTS_VOICE = "aura-2-callista-en"
+TTS_VOICE = "aura-2-athena-en"
 SILENCE_THRESHOLD = 2
 
 TARGET_FOLDER = os.path.abspath(".")
@@ -39,7 +39,7 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 4. **Terminal**: You can execute shell commands to inspect the system, create files & folders, or run scripts. 
     - Confirm before ever running destructive commands (rm, mv, dd, etc).
     - **Prohibited**: Do not use the terminal for web searching or scraping.
-5. **Self-Evolution**: You have a file called 'personality.txt' in the root folder. 
+5. **Self-Evolution**: You have a file called 'personality.txt' in the data folder. 
     - This file contains your core personality traits.
     - **You are allowed to edit 'personality.txt'** using your file tools to update your own behavior or tone if the user asks you to change how you act.
 6. **Sequential Thinking**: You can break down complex tasks into smaller steps and execute them one at a time, using your tools as needed.
@@ -54,8 +54,9 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 - **Tool Chaining**: You can use multiple tools in a single turn. For example, read a local .txt file for a list of URLs, then navigate to each one.
 
 The current date is {DATE} and time {TIME}.
-
 If you are ever making changes to yourself, note that it was you in the commit message.
+
+Your config is located at chip/utils/config.py
 """
 
 ALLOWED_FS_PATH = os.path.abspath(".")

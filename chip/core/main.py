@@ -5,7 +5,7 @@ import json
 import os
 import random
 import subprocess
-import time  # Added for the delay
+import time
 from contextlib import AsyncExitStack
 from google.genai import types
 
@@ -31,6 +31,18 @@ FILLERS = [
     "I'll find out.", "Let me see.", "Checking now."
 ]
 
+RESTART_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "restart_system",
+        "description": "Restarts the entire AI system (Chip). Use this if you are stuck, experiencing errors, or if the user explicitly asks you to reboot/restart.",
+        "parameters": {
+            "type": "object", 
+            "properties": {} # No arguments needed
+        }
+    }
+}
+
 def console_listener(loop):
     while True:
         try:
@@ -54,10 +66,8 @@ def restart_imcp():
     
     try:
         subprocess.run(["open", "/Applications/iMCP.app"], check=True)
-        
         print("[SYSTEM] iMCP launching... waiting 2s for initialization...")
         time.sleep(2) 
-        
     except Exception as e:
         print(f"[ERROR] Failed to launch iMCP: {e}")
 
@@ -81,6 +91,8 @@ async def main():
     all_tools = []
     tool_to_session = {}
     history = []
+
+    all_tools.append(RESTART_TOOL)
 
     try:
         async with AsyncExitStack() as stack:
@@ -169,6 +181,17 @@ async def main():
                             fname = fn.name
                             fargs = fn.args 
                             
+                            if fname == "restart_system":
+                                print("[SYSTEM] Restart initiated by AI...")
+                                await services.stream_tts(iter(["Rebooting system now."]))
+                                
+                                subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
+                                if history:
+                                    await context_manager.generate_and_save_summary(history, services)
+                                
+                                print("[SYSTEM] Re-executing process...")
+                                os.execv(sys.executable, [sys.executable] + sys.argv)
+
                             session = tool_to_session.get(fname)
                             tool_result_str = ""
                             
@@ -202,6 +225,7 @@ async def main():
         print("\n[SYSTEM] Stopping loop and closing tools...")
 
     finally:
+        subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
         if history:
             print("[SYSTEM] Tools closed. Generating session summary...")
             await context_manager.generate_and_save_summary(history, services)
