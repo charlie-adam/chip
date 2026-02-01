@@ -28,7 +28,9 @@ from chip.core import context_manager
 FILLERS = [
     "Working on it.", "One moment.", "Just a second.", "Let me check.",
     "Processing.", "Getting that for you.", "Hold on a moment.",
-    "I'll find out.", "Let me see.", "Checking now."
+    "Let me see.", "Checking now.", "Alrighty.", "Sure thing.", "On it.",
+    "Right away.", "I'll take care of that.", "Give me a moment.",
+    "Let me handle that.", "Just a moment please."
 ]
 
 RESTART_TOOL = {
