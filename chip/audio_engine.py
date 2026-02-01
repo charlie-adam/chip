@@ -145,11 +145,5 @@ class Microphone:
             while True:
                 await asyncio.sleep(1)
 
-def select_microphone():
-    print("\n--- Available Audio Devices ---")
-    devices = sd.query_devices()
-    for i, dev in enumerate(devices):
-        if dev['max_input_channels'] > 0:
-            print(f"[{i}] {dev['name']}")
-    
+def select_microphone():    
     return sd.default.device[0]

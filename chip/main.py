@@ -8,8 +8,6 @@ from contextlib import AsyncExitStack
 
 from mcp.client.stdio import stdio_client
 from mcp import ClientSession
-
-# New SDK Types
 from google.genai import types
 
 import config
@@ -17,6 +15,7 @@ import state
 import audio_engine
 import services
 import tools_handler
+import context_manager
 
 FILLERS = [
     "Working on it.",
@@ -40,6 +39,10 @@ def console_listener(loop):
         except: break
 
 async def main():
+    personality_text, last_summary = context_manager.load_context()
+    
+    full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### CURRENT PERSONALITY SETTINGS:\n{personality_text}\n\n### PREVIOUS SESSION MEMORY:\n{last_summary}"
+
     mic_id = audio_engine.select_microphone()
     engine = audio_engine.AudioEngine()
     engine.start() 
@@ -52,6 +55,7 @@ async def main():
     tm = tools_handler.ToolManager(config.MCP_SERVERS)
     all_tools = []
     tool_to_session = {}
+    history = []
 
     async with AsyncExitStack() as stack:
         for server_name in config.MCP_SERVERS:
@@ -73,104 +77,100 @@ async def main():
                 print(f"[ERROR] Failed to connect to {server_name}: {e}")
 
         print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
+        print(f"[SYSTEM] Loaded Personality: {personality_text[:30]}...")
 
         loop = asyncio.get_running_loop()
         threading.Thread(target=console_listener, args=(loop,), daemon=True).start()
 
-        history = []
-
-        while True:
-            user_input = await state.input_queue.get()
-            
-            if getattr(state, "IS_PROCESSING", False):
-                continue
+        try:
+            while True:
+                user_input = await state.input_queue.get()
                 
-            state.IS_PROCESSING = True
-            
-            clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
-            if not user_input.startswith("[USER]"):
-                print(f"[USER (Text)] {clean_text}")
-
-            history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
-
-            try:
-                # Track if we have already announced we are working on this specific request
-                has_played_filler = False 
-
-                # Limit the loop to prevent infinite tool loops
-                for _ in range(5): 
-                    response = await services.ask_llm(
-                        history, 
-                        system_instruction=config.SYSTEM_PROMPT, 
-                        tools=all_tools
-                    )
+                if getattr(state, "IS_PROCESSING", False):
+                    continue
                     
-                    if not response.candidates:
-                        print("[ERROR] No candidates returned from Gemini.")
-                        break
+                state.IS_PROCESSING = True
+                
+                clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
+                if not user_input.startswith("[USER]"):
+                    print(f"[USER (Text)] {clean_text}")
 
-                    candidate = response.candidates[0]
-                    # 1. Add the FULL model turn to history immediately
-                    history.append(candidate.content)
+                history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
 
-                    # 2. Process parts for Text (TTS) and collect Tool Calls
-                    tool_calls = []
-                    
-                    for part in candidate.content.parts:
-                        if part.text:
-                            print(f"[CHIP] {part.text}")
-                            await services.stream_tts(iter([part.text]))
+                try:
+                    has_played_filler = False 
+
+                    for _ in range(5): 
+                        response = await services.ask_llm(
+                            history, 
+                            system_instruction=full_system_prompt, 
+                            tools=all_tools
+                        )
                         
-                        if part.function_call:
-                            tool_calls.append(part.function_call)
+                        if not response.candidates:
+                            print("[ERROR] No candidates returned from Gemini.")
+                            break
 
-                    # 3. If no tools, we are done with this turn
-                    if not tool_calls:
-                        break
-                    
-                    # 4. Handle Tool Calls
-                    # Only play the filler if we haven't played it yet for this user request
-                    if not has_played_filler:
-                        filler = random.choice(FILLERS)
-                        print(f"[CHIP (Filler)] {filler}")
-                        await services.stream_tts(iter([filler]))
-                        has_played_filler = True
+                        candidate = response.candidates[0]
+                        history.append(candidate.content)
 
-                    response_parts = []
-                    
-                    for fn in tool_calls:
-                        fname = fn.name
-                        fargs = fn.args 
+                        tool_calls = []
                         
-                        session = tool_to_session.get(fname)
-                        tool_result_str = ""
+                        for part in candidate.content.parts:
+                            if part.text:
+                                print(f"[CHIP] {part.text}")
+                                await services.stream_tts(iter([part.text]))
+                            
+                            if part.function_call:
+                                tool_calls.append(part.function_call)
+
+                        if not tool_calls:
+                            break
                         
-                        if session:
-                            print(f"[TOOL] Executing {fname} with args {fargs}")
-                            try:
-                                res = await session.call_tool(fname, fargs)
-                                for content in res.content:
-                                    if hasattr(content, 'text'):
-                                        tool_result_str += content.text
-                                    else:
-                                        tool_result_str += str(content)
-                            except Exception as e:
-                                tool_result_str = f"Error: {str(e)}"
-                        else:
-                            tool_result_str = f"Error: Tool {fname} not found."
+                        if not has_played_filler:
+                            filler = random.choice(FILLERS)
+                            print(f"[CHIP (Filler)] {filler}")
+                            await services.stream_tts(iter([filler]))
+                            has_played_filler = True
 
-                        response_parts.append(types.Part.from_function_response(
-                            name=fname,
-                            response={"result": tool_result_str}
-                        ))
+                        response_parts = []
+                        
+                        for fn in tool_calls:
+                            fname = fn.name
+                            fargs = fn.args 
+                            
+                            session = tool_to_session.get(fname)
+                            tool_result_str = ""
+                            
+                            if session:
+                                print(f"[TOOL] Executing {fname} with args {fargs}")
+                                try:
+                                    res = await session.call_tool(fname, fargs)
+                                    for content in res.content:
+                                        if hasattr(content, 'text'):
+                                            tool_result_str += content.text
+                                        else:
+                                            tool_result_str += str(content)
+                                except Exception as e:
+                                    tool_result_str = f"Error: {str(e)}"
+                            else:
+                                tool_result_str = f"Error: Tool {fname} not found."
 
-                    # 5. Append ALL tool results as a single USER turn
-                    history.append(types.Content(role="user", parts=response_parts))
+                            response_parts.append(types.Part.from_function_response(
+                                name=fname,
+                                response={"result": tool_result_str}
+                            ))
 
-            except Exception as e:
-                print(f"[ERROR] LLM Loop: {e}")
-            finally:
-                state.IS_PROCESSING = False
+                        history.append(types.Content(role="user", parts=response_parts))
+
+                except Exception as e:
+                    print(f"[ERROR] LLM Loop: {e}")
+                finally:
+                    state.IS_PROCESSING = False
+
+        finally:
+            if history:
+                await context_manager.generate_and_save_summary(history, services)
 
 if __name__ == "__main__":
     try:
