@@ -9,75 +9,17 @@ import time
 from contextlib import AsyncExitStack
 from google.genai import types
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
-sys.path.append(os.path.abspath(os.path.join(current_dir, "../..")))
-
 from mcp.client.stdio import stdio_client
 from mcp import ClientSession
-from google.genai import types
 
-from chip.utils import smalls
-from chip.utils import config
-from chip.core import state
+from chip.utils import smalls, config, tools_handler
+from chip.core import state, services, context_manager
 from chip.audio import audio_engine
-from chip.core import services
-from chip.utils import tools_handler
-from chip.core import context_manager
-
-FILLERS = [
-    "Working on it.", "One moment.", "Just a second.", "Let me check.",
-    "Processing.", "Getting that for you.", "Hold on a moment.",
-    "Let me see.", "Checking now.", "Alrighty.", "Sure thing.", "On it.",
-    "Right away.", "I'll take care of that.", "Give me a moment.",
-    "Let me handle that.", "Just a moment please."
-]
-
-RESTART_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "restart_system",
-        "description": "Restarts the entire AI system (Chip). Use this if you are stuck, experiencing errors, or if the user explicitly asks you to reboot/restart.",
-        "parameters": {
-            "type": "object", 
-            "properties": {} # No arguments needed
-        }
-    }
-}
-
-def console_listener(loop):
-    while True:
-        try:
-            text = sys.stdin.readline()
-            if text.strip():
-                asyncio.run_coroutine_threadsafe(state.input_queue.put(text.strip()), loop)
-        except: break
-
-def restart_imcp():
-    """
-    1. Force kills iMCP and its server to clear any zombie states.
-    2. Relaunches the app.
-    3. Waits for it to be ready.
-    """
-    print("[SYSTEM] Restarting iMCP to ensure clean connection...")
-    
-    subprocess.run(["pkill", "-f", "iMCP"], stderr=subprocess.DEVNULL)
-    subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
-    
-    time.sleep(1) # Wait for death
-    
-    try:
-        subprocess.run(["open", "/Applications/iMCP.app"], check=True)
-        print("[SYSTEM] iMCP launching... waiting 2s for initialization...")
-        time.sleep(2) 
-    except Exception as e:
-        print(f"[ERROR] Failed to launch iMCP: {e}")
 
 async def main():
-    restart_imcp()
+    services.restart_imcp()
 
     personality_text, last_summary = context_manager.load_context()
-    
     full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### CURRENT PERSONALITY SETTINGS:\n{personality_text}\n\n### PREVIOUS SESSION MEMORY:\n{last_summary}"
 
     mic_id = audio_engine.select_microphone()
@@ -90,11 +32,9 @@ async def main():
     asyncio.create_task(services.start_deepgram_stt())
     
     tm = tools_handler.ToolManager(config.MCP_SERVERS)
-    all_tools = []
+    all_tools = [config.RESTART_TOOL]
     tool_to_session = {}
     history = []
-
-    all_tools.append(RESTART_TOOL)
 
     try:
         async with AsyncExitStack() as stack:
@@ -107,13 +47,11 @@ async def main():
                     await session.initialize()
                     
                     mcp_tools_list = await session.list_tools()
-                    
                     for tool in mcp_tools_list.tools:
                         if hasattr(tool, "inputSchema"):
                             tool.inputSchema = smalls.clean_schema(tool.inputSchema)
-
-                    formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
                     
+                    formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
                     for t in mcp_tools_list.tools:
                         tool_to_session[t.name] = session
                     
@@ -122,17 +60,12 @@ async def main():
                     print(f"[ERROR] Failed to connect to {server_name}: {e}")
 
             print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
-            print(f"[SYSTEM] Loaded Personality: {personality_text[:30]}...")
-
             loop = asyncio.get_running_loop()
-            threading.Thread(target=console_listener, args=(loop,), daemon=True).start()
+            threading.Thread(target=services.console_listener, args=(loop,), daemon=True).start()
 
             while True:
                 user_input = await state.input_queue.get()
-                
-                if getattr(state, "IS_PROCESSING", False):
-                    continue
-                    
+                if getattr(state, "IS_PROCESSING", False): continue
                 state.IS_PROCESSING = True
                 
                 clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
@@ -143,97 +76,55 @@ async def main():
 
                 try:
                     has_played_filler = False 
-
                     for _ in range(config.MAX_LLM_TURNS): 
-                        response = await services.ask_llm(
-                            history, 
-                            system_instruction=full_system_prompt, 
-                            tools=all_tools
-                        )
+                        response = await services.ask_llm(history, system_instruction=full_system_prompt, tools=all_tools)
+                        if not response.candidates: break
                         
-                        if not response.candidates:
-                            print("[ERROR] No candidates returned from Gemini.")
-                            break
-
                         candidate = response.candidates[0]
                         history.append(candidate.content)
+                        tool_calls = [p.function_call for p in candidate.content.parts if p.function_call]
+                        text_parts = [p.text for p in candidate.content.parts if p.text]
 
-                        tool_calls = []
-                        
-                        for part in candidate.content.parts:
-                            if part.text:
-                                print(f"[CHIP] {part.text}")
-                                await services.stream_tts(iter([part.text]))
-                            
-                            if part.function_call:
-                                tool_calls.append(part.function_call)
+                        for text in text_parts:
+                            print(f"[CHIP] {text}")
+                            await services.stream_tts(iter([text]))
 
-                        if not tool_calls:
-                            break
+                        if not tool_calls: break
                         
                         if not has_played_filler:
-                            filler = random.choice(FILLERS)
+                            filler = random.choice(config.FILLERS)
                             print(f"[CHIP (Filler)] {filler}")
                             await services.stream_tts(iter([filler]))
                             has_played_filler = True
 
                         response_parts = []
-                        
                         for fn in tool_calls:
-                            fname = fn.name
-                            fargs = fn.args 
-                            
+                            fname, fargs = fn.name, fn.args 
                             if fname == "restart_system":
-                                print("[SYSTEM] Restart initiated by AI...")
                                 await services.stream_tts(iter(["Rebooting system now."]))
-                                
                                 subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
-                                if history:
-                                    await context_manager.generate_and_save_summary(history, services)
-                                
-                                print("[SYSTEM] Re-executing process...")
+                                if history: await context_manager.generate_and_save_summary(history, services)
                                 os.execv(sys.executable, [sys.executable] + sys.argv)
 
                             session = tool_to_session.get(fname)
-                            tool_result_str = ""
-                            
+                            res_str = ""
                             if session:
-                                print(f"[TOOL] Executing {fname} with args {fargs}")
                                 try:
                                     res = await session.call_tool(fname, fargs)
-                                    for content in res.content:
-                                        if hasattr(content, 'text'):
-                                            tool_result_str += content.text
-                                        else:
-                                            tool_result_str += str(content)
-                                except Exception as e:
-                                    tool_result_str = f"Error: {str(e)}"
-                            else:
-                                tool_result_str = f"Error: Tool {fname} not found."
-
-                            response_parts.append(types.Part.from_function_response(
-                                name=fname,
-                                response={"result": tool_result_str}
-                            ))
-
+                                    res_str = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+                                except Exception as e: res_str = f"Error: {e}"
+                            else: res_str = f"Error: Tool {fname} not found."
+                            
+                            response_parts.append(types.Part.from_function_response(name=fname, response={"result": res_str}))
                         history.append(types.Content(role="user", parts=response_parts))
 
-                except Exception as e:
-                    print(f"[ERROR] LLM Loop: {e}")
-                finally:
-                    state.IS_PROCESSING = False
-
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        print("\n[SYSTEM] Stopping loop and closing tools...")
+                except Exception as e: print(f"[ERROR] LLM Loop: {e}")
+                finally: state.IS_PROCESSING = False
 
     finally:
         subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
-        if history:
-            print("[SYSTEM] Tools closed. Generating session summary...")
-            await context_manager.generate_and_save_summary(history, services)
+        if history: await context_manager.generate_and_save_summary(history, services)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n[SYSTEM] Shutdown.")
+    try: asyncio.run(main())
+    except KeyboardInterrupt: print("\n[SYSTEM] Shutdown.")

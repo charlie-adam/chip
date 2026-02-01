@@ -19,9 +19,29 @@ SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 24000
 BLOCK_SIZE = 8192
 LLM_MODEL = "gemini-3-flash-preview"
-TTS_VOICE = "aura-2-luna-en"  # Alternative Aura-2 voices: asteria, hera, luna, stella (female); orion, zeus, arcas, perseus, angus (male)
+TTS_VOICE = "aura-2-luna-en"
 SILENCE_THRESHOLD = 1
 MAX_LLM_TURNS = 15
+
+FILLERS = [
+    "Working on it.", "One moment.", "Just a second.", "Let me check.",
+    "Processing.", "Getting that for you.", "Hold on a moment.",
+    "Let me see.", "Checking now.", "Alrighty.", "Sure thing.", "On it.",
+    "Right away.", "I'll take care of that.", "Give me a moment.",
+    "Let me handle that.", "Just a moment please."
+]
+
+RESTART_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "restart_system",
+        "description": "Restarts the entire AI system (Chip). Use this if you are stuck, experiencing errors, or if the user explicitly asks you to reboot/restart.",
+        "parameters": {
+            "type": "object", 
+            "properties": {}
+        }
+    }
+}
 
 TARGET_FOLDER = os.path.abspath(".")
 DATE = datetime.datetime.now().strftime("%B %d, %Y")
