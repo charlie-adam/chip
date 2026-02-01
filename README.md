@@ -9,15 +9,15 @@ A professional, highly capable AI assistant with direct access to local files an
 - **Self-Evolution**: Ability to modify its own personality and behavior.
 
 ## Project Structure
-- `chip/`: Core source code.
-  - `main.py`: Entry point.
-  - `services.py`: LLM, STT, and TTS integrations.
-  - `config.py`: Configuration and system prompts.
-  - `tools_handler.py`: MCP tool management.
-- `personality.txt`: Defines the AI's persona.
+- `chip/`: Source code directory.
+  - `audio/`: Audio processing (STT/TTS).
+  - `core/`: Main logic, state management, and services.
+  - `servers/`: External tool servers (Terminal, Web Search).
+  - `utils/`: Configuration and tool handling.
+- `data/`: Persistent storage for personality and session history.
 - `credentials.json`: Google Workspace credentials.
 
 ## Setup
 1. Install dependencies using `uv sync`.
 2. Set environment variables in a `.env` file (see `.env.example`).
-3. Run with `uv run chip/main.py`.
+3. Run with `uv run python -m chip.core.main`.
