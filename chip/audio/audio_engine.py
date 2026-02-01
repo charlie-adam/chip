@@ -119,7 +119,7 @@ class Microphone:
         
         def callback(indata, frames, time_info, status):
             # 1. Check if bot is currently speaking
-            if state.IS_SPEAKING:
+            if state.IS_SPEAKING or getattr(state, "IS_PROCESSING", False):
                 return
 
             # 2. COOLDOWN CHECK (The Echo Fix)
