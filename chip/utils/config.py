@@ -19,8 +19,8 @@ SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
 LLM_MODEL = "gemini-3-flash-preview"
-TTS_VOICE = "aura-2-hera-en"  # Alternative Aura-2 voices: asteria, hera, luna, stella (female); orion, zeus, arcas, perseus, angus (male)
-SILENCE_THRESHOLD = 2
+TTS_VOICE = "aura-2-luna-en"  # Alternative Aura-2 voices: asteria, hera, luna, stella (female); orion, zeus, arcas, perseus, angus (male)
+SILENCE_THRESHOLD = 1
 
 TARGET_FOLDER = os.path.abspath(".")
 DATE = datetime.datetime.now().strftime("%B %d, %Y")
