@@ -19,7 +19,16 @@ from chip.audio import audio_engine
 async def main():
     services.restart_imcp()
     subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
-    cwd = os.getcwd(); python_path = sys.executable; applescript = f"tell application \"Terminal\" to do script \"cd {cwd} && {python_path} chip_face.py\""; subprocess.run(["osascript", "-e", applescript], stderr=subprocess.DEVNULL)
+    
+    cwd = os.getcwd()
+    python_path = sys.executable
+    applescript = f'''
+    tell application "Terminal"
+        set newTab to do script "cd {cwd} && {python_path} chip_face.py"
+        set custom title of newTab to "ChipFace"
+    end tell
+    '''
+    subprocess.run(["osascript", "-e", applescript], stderr=subprocess.DEVNULL)
 
     personality_text, last_summary = context_manager.load_context()
     full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### CURRENT PERSONALITY SETTINGS:\n{personality_text}\n\n### PREVIOUS SESSION MEMORY:\n{last_summary}"
@@ -107,6 +116,7 @@ async def main():
                                 await services.stream_tts(iter(["Rebooting system now."]))
                                 subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
                                 subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
+                                subprocess.run(["osascript", "-e", 'tell application "Terminal" to close (every window whose name contains "ChipFace") saving no'], stderr=subprocess.DEVNULL)
                                 if history:
                                     await context_manager.generate_and_save_summary(history, services)
                                 print("[SYSTEM] Re-executing process as module...")
@@ -131,6 +141,7 @@ async def main():
     finally:
         subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
         subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
+        subprocess.run(["osascript", "-e", 'tell application "Terminal" to close (every window whose name contains "ChipFace") saving no'], stderr=subprocess.DEVNULL)
         if history: await context_manager.generate_and_save_summary(history, services)
 
 if __name__ == "__main__":

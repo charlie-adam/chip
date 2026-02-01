@@ -1,5 +1,7 @@
 import time
 import os
+import signal
+import sys
 
 FACES = {
     "IDLE": """
@@ -30,10 +32,22 @@ STATE_FILE = "chip_state.txt"
 def get_state():
     if not os.path.exists(STATE_FILE):
         return "IDLE"
-    with open(STATE_FILE, "r") as f:
-        return f.read().strip().upper()
+    try:
+        with open(STATE_FILE, "r") as f:
+            return f.read().strip().upper()
+    except:
+        return "IDLE"
+
+def cleanup(signum, frame):
+    os.system('clear')
+    if sys.platform == "darwin":
+        os.system("osascript -e 'tell application \"Terminal\" to close (every window whose name contains \"ChipFace\") saving no' &")
+    sys.exit(0)
 
 def main():
+    signal.signal(signal.SIGINT, cleanup)
+    signal.signal(signal.SIGTERM, cleanup)
+
     last_state = None
     try:
         while True:
@@ -49,8 +63,8 @@ def main():
                 last_state = current_state
             
             time.sleep(0.5)
-    except KeyboardInterrupt:
-        pass
+    except Exception:
+        cleanup(None, None)
 
 if __name__ == "__main__":
     main()
