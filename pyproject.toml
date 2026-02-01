@@ -23,3 +23,5 @@ dependencies = [
     "sounddevice>=0.5.5",
     "soundfile>=0.13.1",
 ]
+[tool.setuptools]
+packages = ["chip"]
