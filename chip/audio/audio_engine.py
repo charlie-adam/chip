@@ -7,15 +7,13 @@ import time
 from chip.core import state
 from chip.utils import config
 
-# Initialize a timestamp in state to track when the bot last stopped speaking
 if not hasattr(state, 'last_speech_time'):
     state.last_speech_time = 0
 
 class AudioEngine:
     def __init__(self):
-        # FORCE 48kHz for crisp, non-muddy audio
-        self.samplerate = 48000 
-        self.blocksize = 2048 
+        self.samplerate = config.SAMPLE_RATE_TTS
+        self.blocksize = config.BLOCK_SIZE 
         
         self.stream = sd.OutputStream(
             samplerate=self.samplerate,
@@ -28,7 +26,6 @@ class AudioEngine:
         self.running = False
         self._leftover_data = b''
         
-        # --- Stability Flags ---
         self._is_starting_phrase = True
         self._buffer_threshold = 3  # Wait for 3 chunks before playing (Fixes crackling)
         self._has_started_playing = False
@@ -36,7 +33,7 @@ class AudioEngine:
     def start(self):
         self.running = True
         self.stream.start()
-        print(f"[SYSTEM] Audio Engine Started @ {self.samplerate}Hz (Anti-Echo Active)")
+        print(f"[SYSTEM] Audio Engine Started @ {self.samplerate}Hz")
 
     def _apply_fade(self, audio_array, direction='in'):
         """Smooths the start/end of audio to prevent speaker 'clicks'"""
@@ -51,8 +48,6 @@ class AudioEngine:
         bytes_needed = frames * 2
         output = b''
 
-        # 1. JITTER BUFFER: Don't start playing until we have enough data
-        # This prevents the stream from running dry if internet lags slightly
         if not self._has_started_playing:
             if state.audio_queue.qsize() >= self._buffer_threshold:
                 self._has_started_playing = True
@@ -123,25 +118,21 @@ class Microphone:
                 return
 
             # 2. COOLDOWN CHECK (The Echo Fix)
-            # If the bot stopped speaking less than 0.6s ago, ignore input.
-            # This lets room reverb die down.
             time_since_speech = time.time() - getattr(state, 'last_speech_time', 0)
             if time_since_speech < 0.6: 
                 return
 
             loop.call_soon_threadsafe(state.mic_queue.put_nowait, indata.tobytes())
 
-        # Note: mic samplerate should usually stay at 16000 or 24000 for STT compatibility
-        # unless your STT provider specifically supports 48k input.
         with sd.InputStream(
             device=device_index, 
             channels=1, 
             samplerate=config.SAMPLE_RATE_MIC, 
             dtype='int16', 
-            blocksize=2048,
+            blocksize=config.BLOCK_SIZE,
             callback=callback
         ):
-            print(f"[SYSTEM] Microphone listening on Device {device_index}")
+            print(f"[SYSTEM] Microphone listening on Device {device_index} @ {config.SAMPLE_RATE_MIC}Hz")
             while True:
                 await asyncio.sleep(1)
 

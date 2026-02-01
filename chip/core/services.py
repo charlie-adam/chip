@@ -1,7 +1,7 @@
 import asyncio
 import json
 import sys
-import requests
+import httpx
 import websockets
 import re
 import os
@@ -130,24 +130,23 @@ async def stream_tts(text_iterator):
 
 async def _fetch_audio(text):
     state.IS_SPEAKING = True
-    url = f"https://api.deepgram.com/v1/speak?model={config.TTS_VOICE}&encoding=linear16&sample_rate=48000&container=none"
+    url = f"https://api.deepgram.com/v1/speak?model={config.TTS_VOICE}&encoding=linear16&sample_rate={config.SAMPLE_RATE_TTS}&container=none"
     headers = {
         "Authorization": f"Token {config.DEEPGRAM_API_KEY}",
         "Content-Type": "application/json"
     }
     
     try:
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, lambda: _request_stream(url, headers, text))
+        async with httpx.AsyncClient() as client:
+            async with client.stream("POST", url, headers=headers, json={"text": text}) as r:
+                async for chunk in r.aiter_bytes(chunk_size=2048):
+                    if chunk:
+                        state.audio_queue.put(chunk)
+    except Exception as e:
+        print(f"[ERROR] TTS Streaming failed: {e}")
     finally:
         await asyncio.sleep(0.5)
         state.IS_SPEAKING = False
-
-def _request_stream(url, headers, text):
-    with requests.post(url, headers=headers, json={"text": text}, stream=True) as r:
-        for chunk in r.iter_content(chunk_size=2048):
-            if chunk:
-                state.audio_queue.put(chunk)
 
 # --- LLM (New Google GenAI SDK) ---
 async def ask_llm(history, system_instruction=None, tools=None):
