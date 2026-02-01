@@ -110,6 +110,7 @@ async def main():
                             res_str = ""
                             if session:
                                 try:
+                                    print(f"[SYSTEM] Calling tool: {fname} with args {fargs}")
                                     res = await session.call_tool(fname, fargs)
                                     res_str = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
                                 except Exception as e: res_str = f"Error: {e}"
