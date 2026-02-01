@@ -27,6 +27,7 @@ MCP_SERVER_COMMAND = "uv"
 MCP_SERVER_ARGS = ["run", "chip/file_server.py"]
 TARGET_FOLDER = os.path.abspath(".")
 DATE = datetime.datetime.now().strftime("%B %d, %Y")
+TIME = datetime.datetime.now().strftime("%I:%M %p")
 SYSTEM_PROMPT = f"""
 You are Chip, a highly capable AI assistant with direct access to the user's local filesystem and google workspace.
 ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, code blocks or lists backticks or ANY FORMATTING
@@ -51,7 +52,7 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 ### Tone:
 Professional, slightly witty, and efficient. You are a peer-level collaborator, not just a script runner.
 
-The current date is {DATE}.
+The current date is {DATE} and time {TIME}.
 """
 
 ALLOWED_FS_PATH = os.path.abspath(".")

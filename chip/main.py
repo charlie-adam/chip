@@ -19,13 +19,16 @@ import services
 import tools_handler
 
 FILLERS = [
-    "One moment, let me check that.",
-    "I'll have a quick look.",
+    "Working on it.",
+    "One moment.",
     "Just a second.",
-    "Processing that for you.",
+    "Let me check.",
+    "Processing.",
+    "Getting that for you.",
+    "Hold on a moment.",
+    "I'll find out.",
     "Let me see.",
-    "Checking on that.",
-    "On it."
+    "Checking now."
 ]
 
 def console_listener(loop):
@@ -91,6 +94,9 @@ async def main():
             history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
 
             try:
+                # Track if we have already announced we are working on this specific request
+                has_played_filler = False 
+
                 # Limit the loop to prevent infinite tool loops
                 for _ in range(5): 
                     response = await services.ask_llm(
@@ -104,7 +110,7 @@ async def main():
                         break
 
                     candidate = response.candidates[0]
-                    # 1. Add the FULL model turn to history immediately to preserve thought_signature
+                    # 1. Add the FULL model turn to history immediately
                     history.append(candidate.content)
 
                     # 2. Process parts for Text (TTS) and collect Tool Calls
@@ -123,9 +129,12 @@ async def main():
                         break
                     
                     # 4. Handle Tool Calls
-                    filler = random.choice(FILLERS)
-                    print(f"[CHIP (Filler)] {filler}")
-                    await services.stream_tts(iter([filler]))
+                    # Only play the filler if we haven't played it yet for this user request
+                    if not has_played_filler:
+                        filler = random.choice(FILLERS)
+                        print(f"[CHIP (Filler)] {filler}")
+                        await services.stream_tts(iter([filler]))
+                        has_played_filler = True
 
                     response_parts = []
                     
@@ -140,7 +149,6 @@ async def main():
                             print(f"[TOOL] Executing {fname} with args {fargs}")
                             try:
                                 res = await session.call_tool(fname, fargs)
-                                # MCP returns a list of content, usually TextContent or ImageContent
                                 for content in res.content:
                                     if hasattr(content, 'text'):
                                         tool_result_str += content.text
@@ -151,7 +159,6 @@ async def main():
                         else:
                             tool_result_str = f"Error: Tool {fname} not found."
 
-                        # Create the function response part
                         response_parts.append(types.Part.from_function_response(
                             name=fname,
                             response={"result": tool_result_str}
@@ -159,7 +166,6 @@ async def main():
 
                     # 5. Append ALL tool results as a single USER turn
                     history.append(types.Content(role="user", parts=response_parts))
-                    # The loop continues now, sending the results back to the LLM
 
             except Exception as e:
                 print(f"[ERROR] LLM Loop: {e}")
