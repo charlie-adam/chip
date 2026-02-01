@@ -1,1 +1,0 @@
-We updated your voice settings in `chip/utils/config.py`. I researched Deepgram Aura-2 options and documented alternatives (Asteria, Hera, Zeus, etc.) in the code. Per your preference for a female voice, I switched the default from `athena` to `asteria` and restarted the system. You prefer a natural-sounding female persona for your assistant.

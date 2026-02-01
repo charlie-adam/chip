@@ -62,4 +62,6 @@ Thumbs.db
 *.log
 
 credentials.json
-data/
+data/*.txt
+data/last_session.txt
+data/personality.txt
