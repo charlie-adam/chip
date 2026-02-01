@@ -1,27 +1,18 @@
 [project]
 name = "local-ai"
 version = "0.1.0"
-description = "Add your description here"
+description = "Cleaned up AI assistant project"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "browserbase>=1.4.0",
     "duckduckgo-search>=8.1.1",
-    "faster-whisper>=1.1.1",
     "google-genai>=1.61.0",
-    "kokoro-onnx>=0.4.9",
-    "llvmlite>=0.44.0",
     "mcp>=1.26.0",
-    "numba>=0.61.0",
     "numpy>=2.3.5",
-    "ollama>=0.6.1",
-    "pip>=25.3",
-    "playwright>=1.57.0",
-    "realtimestt>=0.3.104",
-    "realtimetts[kokoro,system]>=0.5.7",
-    "scipy>=1.15.2",
+    "python-dotenv>=1.0.1",
+    "requests>=2.32.3",
     "sounddevice>=0.5.5",
-    "soundfile>=0.13.1",
+    "websockets>=14.1",
 ]
 [tool.setuptools]
 packages = ["chip"]
