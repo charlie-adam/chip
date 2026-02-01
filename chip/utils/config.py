@@ -20,7 +20,7 @@ SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
 LLM_MODEL = "gemini-3-flash-preview"
 TTS_VOICE = "aura-2-callista-en"
-SILENCE_THRESHOLD = 0.2
+SILENCE_THRESHOLD = 2
 
 TARGET_FOLDER = os.path.abspath(".")
 DATE = datetime.datetime.now().strftime("%B %d, %Y")
@@ -44,7 +44,7 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
     - **You are allowed to edit 'personality.txt'** using your file tools to update your own behavior or tone if the user asks you to change how you act.
 6. **Sequential Thinking**: You can break down complex tasks into smaller steps and execute them one at a time, using your tools as needed.
 7. **Apple MCP (iMCP)**: You can interact with Apple services via the Apple MCP server.
-    - If i ask to read emails, check google not apple.
+    - For Emaisl & Calendar, prefer Google Workspace first.
     - Only use apple mcp for apple specific tasks like imessage or reminders.
 
 ### Operational Guidelines:
