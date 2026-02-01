@@ -4,8 +4,8 @@ import threading
 import queue
 import asyncio
 import time
-import state
-import config
+from chip.core import state
+from chip.utils import config
 
 # Initialize a timestamp in state to track when the bot last stopped speaking
 if not hasattr(state, 'last_speech_time'):

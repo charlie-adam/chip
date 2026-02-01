@@ -6,17 +6,20 @@ import os
 import random
 from contextlib import AsyncExitStack
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+sys.path.append(os.path.abspath(os.path.join(current_dir, "../..")))
+
 from mcp.client.stdio import stdio_client
 from mcp import ClientSession
 from google.genai import types
 
-import config
-import state
-import audio_engine
-import services
-import tools_handler
-import context_manager
-
+from chip.utils import config           # Was: import config
+from chip.core import state             # Was: import state
+from chip.audio import audio_engine     # Was: import audio_engine
+from chip.core import services          # Was: import services
+from chip.utils import tools_handler    # Was: import tools_handler
+from chip.core import context_manager   # Was: import context_manager
 FILLERS = [
     "Working on it.",
     "One moment.",

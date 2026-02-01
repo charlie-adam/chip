@@ -8,8 +8,8 @@ import os
 from google import genai
 from google.genai import types
 
-import config
-import state
+from chip.utils import config
+from chip.core import state
 
 # --- Client Initialization ---
 # The new SDK handles async via the .aio attribute

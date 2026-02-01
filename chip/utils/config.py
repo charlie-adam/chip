@@ -22,8 +22,6 @@ LLM_MODEL = "gemini-3-flash-preview"
 TTS_VOICE = "aura-2-callista-en"
 SILENCE_THRESHOLD = 0.2
 
-MCP_SERVER_COMMAND = "uv" 
-MCP_SERVER_ARGS = ["run", "chip/file_server.py"]
 TARGET_FOLDER = os.path.abspath(".")
 DATE = datetime.datetime.now().strftime("%B %d, %Y")
 TIME = datetime.datetime.now().strftime("%I:%M %p")
@@ -59,7 +57,7 @@ ALLOWED_FS_PATH = os.path.abspath(".")
 MCP_SERVERS = {
     "web_search": {
         "command": "uv",
-        "args": ["run", "chip/web_search_server.py"]
+        "args": ["run", "chip/servers/web_search_server.py"]
     },
     "workspace": {
         "command": "node",
@@ -80,6 +78,6 @@ MCP_SERVERS = {
     },
     "terminal": {
         "command": "uv",
-        "args": ["run", "chip/terminal_server.py"] 
+        "args": ["run", "chip/servers/terminal_server.py"] 
     },
 }

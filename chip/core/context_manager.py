@@ -3,8 +3,8 @@ import asyncio
 from google.genai import types
 
 # File paths
-PERSONALITY_FILE = "personality.txt"
-SUMMARY_FILE = "last_session.txt"
+PERSONALITY_FILE = "data/personality.txt"
+SUMMARY_FILE = "data/last_session.txt"
 
 def ensure_files_exist():
     """Creates the files if they don't exist yet."""
