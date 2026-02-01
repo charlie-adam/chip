@@ -61,4 +61,4 @@ Thumbs.db
 # Project specific
 *.log
 
-credentials.json
+credentials.jsondata/
