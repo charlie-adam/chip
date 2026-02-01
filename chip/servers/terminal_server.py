@@ -40,7 +40,7 @@ def execute_command(command: str) -> str:
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30  # Timeout to prevent hanging
+            timeout=5  # Timeout to prevent hanging
         )
         
         output = result.stdout
@@ -50,7 +50,7 @@ def execute_command(command: str) -> str:
         return output.strip() or "[Command executed successfully with no output]"
 
     except subprocess.TimeoutExpired:
-        return "Error: Command timed out after 30 seconds."
+        return "Error: Command timed out after 5 seconds."
     except Exception as e:
         return f"Error executing command: {str(e)}"
 

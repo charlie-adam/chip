@@ -144,7 +144,7 @@ async def main():
                 try:
                     has_played_filler = False 
 
-                    for _ in range(5): 
+                    for _ in range(config.MAX_LLM_TURNS): 
                         response = await services.ask_llm(
                             history, 
                             system_instruction=full_system_prompt, 
