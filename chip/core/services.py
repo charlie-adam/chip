@@ -133,7 +133,7 @@ async def stream_tts(text_iterator):
         await _fetch_audio(buffer)
 
 async def _fetch_audio(text):
-    state.IS_SPEAKING = True
+    state.set_speaking(True)
     url = f"https://api.deepgram.com/v1/speak?model={config.TTS_VOICE}&encoding=linear16&sample_rate={config.SAMPLE_RATE_TTS}&container=none"
     headers = {
         "Authorization": f"Token {config.DEEPGRAM_API_KEY}",
@@ -149,7 +149,7 @@ async def _fetch_audio(text):
         print(f"[ERROR] TTS Streaming failed: {e}")
     finally:
         await asyncio.sleep(0.5)
-        state.IS_SPEAKING = False
+        state.set_speaking(False)
 
 # --- LLM ---
 async def ask_llm(history, system_instruction=None, tools=None):

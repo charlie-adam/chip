@@ -18,6 +18,8 @@ from chip.audio import audio_engine
 
 async def main():
     services.restart_imcp()
+    subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
+    cwd = os.getcwd(); python_path = sys.executable; applescript = f"tell application \"Terminal\" to do script \"cd {cwd} && {python_path} chip_face.py\""; subprocess.run(["osascript", "-e", applescript], stderr=subprocess.DEVNULL)
 
     personality_text, last_summary = context_manager.load_context()
     full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### CURRENT PERSONALITY SETTINGS:\n{personality_text}\n\n### PREVIOUS SESSION MEMORY:\n{last_summary}"
@@ -65,8 +67,8 @@ async def main():
 
             while True:
                 user_input = await state.input_queue.get()
-                if getattr(state, "IS_PROCESSING", False): continue
-                state.IS_PROCESSING = True
+                if state.IS_PROCESSING: continue
+                state.set_processing(True)
                 
                 clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
                 if not user_input.startswith("[USER]"):
@@ -101,10 +103,14 @@ async def main():
                         for fn in tool_calls:
                             fname, fargs = fn.name, fn.args 
                             if fname == "restart_system":
+                                print("[SYSTEM] Restart initiated by AI...")
                                 await services.stream_tts(iter(["Rebooting system now."]))
                                 subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
-                                if history: await context_manager.generate_and_save_summary(history, services)
-                                os.execv(sys.executable, [sys.executable] + sys.argv)
+                                subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
+                                if history:
+                                    await context_manager.generate_and_save_summary(history, services)
+                                print("[SYSTEM] Re-executing process as module...")
+                                os.execv(sys.executable, [sys.executable, "-m", "chip.core.main"])
 
                             session = tool_to_session.get(fname)
                             res_str = ""
@@ -120,10 +126,11 @@ async def main():
                         history.append(types.Content(role="user", parts=response_parts))
 
                 except Exception as e: print(f"[ERROR] LLM Loop: {e}")
-                finally: state.IS_PROCESSING = False
+                finally: state.set_processing(False)
 
     finally:
         subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
+        subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
         if history: await context_manager.generate_and_save_summary(history, services)
 
 if __name__ == "__main__":
