@@ -21,7 +21,7 @@ SAMPLE_RATE_TTS = 48000
 BLOCK_SIZE = 2048
 LLM_MODEL = "gemini-3-flash-preview"
 TTS_VOICE = "aura-2-callista-en"
-SILENCE_THRESHOLD = 1.5
+SILENCE_THRESHOLD = 0.2
 
 MCP_SERVER_COMMAND = "uv" 
 MCP_SERVER_ARGS = ["run", "chip/file_server.py"]
