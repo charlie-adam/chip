@@ -21,4 +21,5 @@ A professional, highly capable AI assistant with direct access a variety of MCP 
 ## Setup
 1. Install dependencies using uv sync.
 2. Set environment variables in a .env file (Needs GEMINI_API_KEY, DEEPGRAM_API_KEY)
-3. Run with uv run python -m chip.core.main.
+3. Add credentials.json to root directory from google oath (with the google worksapce APIs enabled) 
+4. Run with uv run python -m chip.core.main.
