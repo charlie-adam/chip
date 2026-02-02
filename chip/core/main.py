@@ -19,7 +19,7 @@ from chip.utils import schema
 
 async def main():
     services.restart_imcp()
-    subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
+    # subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
     
     cwd = os.getcwd()
     python_path = sys.executable
@@ -29,7 +29,7 @@ async def main():
         set custom title of newTab to "ChipFace"
     end tell
     '''
-    subprocess.run(["osascript", "-e", applescript], stderr=subprocess.DEVNULL)
+    # subprocess.run(["osascript", "-e", applescript], stderr=subprocess.DEVNULL)
 
     personality_text, last_summary = context_manager.load_context()
     full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### CURRENT PERSONALITY SETTINGS:\n{personality_text}\n\n### PREVIOUS SESSION MEMORY:\n{last_summary}"

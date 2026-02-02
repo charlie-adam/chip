@@ -4,27 +4,9 @@ import signal
 import sys
 
 FACES = {
-    "IDLE": """
-      _______
-     |       |
-     | -   - |
-     |   _   |
-     |_______|
-""",
-    "THINKING": """
-      _______
-     |       |
-     | *   * |
-     |   ~   |
-     |_______|
-""",
-    "SPEAKING": """
-      _______
-     |       |
-     | ^   ^ |
-     |   O   |
-     |_______|
-"""
+    "IDLE": "(•_•)",
+    "THINKING": "(0_0)",
+    "SPEAKING": "(^▿^)"
 }
 
 STATE_FILE = "chip_state.txt"
