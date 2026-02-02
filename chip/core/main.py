@@ -209,8 +209,15 @@ async def main():
                             fname, fargs = fn.name, fn.args
                             
                             if fname == "restart_system":
-                                # ... (Keep restart logic) ...
-                                pass
+                                print("[SYSTEM] Restart initiated by AI...")
+                                await services.stream_tts(iter(["Rebooting system now."]))
+                                subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
+                                subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
+                                subprocess.run(["osascript", "-e", 'tell application "Terminal" to close (every window whose name contains "ChipFace") saving no'], stderr=subprocess.DEVNULL)
+                                if history:
+                                    await context_manager.generate_and_save_summary(history, services)
+                                print("[SYSTEM] Re-executing process as module...")
+                                os.execv(sys.executable, [sys.executable, "-m", "chip.core.main"])
 
                             session = tool_to_session.get(fname)
                             tool_names.append(fname)

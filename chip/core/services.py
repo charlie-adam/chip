@@ -186,3 +186,17 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
     if text_buffer.strip():
         yield {"type": "text", "content": text_buffer.strip()}
     yield {"type": "complete_message", "content": accumulated_parts}
+
+async def ask_llm(history, system_instruction=None, tools=None):
+    gemini_tools = _convert_tools_to_gemini(tools) if tools else None
+    config_params = types.GenerateContentConfig(
+        system_instruction=system_instruction,
+        tools=gemini_tools,
+        temperature=0.7
+    )
+    response = await client.aio.models.generate_content(
+        model=config.LLM_MODEL,
+        contents=history,
+        config=config_params
+    )
+    return response
