@@ -69,8 +69,11 @@ async def start_deepgram_stt():
                 print("[SYSTEM] Deepgram Connected.")
                 async def sender():
                     while True:
-                        data = await state.mic_queue.get()
-                        await ws.send(data)
+                        try:
+                            data = await asyncio.wait_for(state.mic_queue.get(), timeout=3.0)
+                            await ws.send(data)
+                        except asyncio.TimeoutError:
+                            await ws.send(json.dumps({"type": "KeepAlive"}))
                 async def receiver():
                     buffer = []
                     last_activity = asyncio.get_event_loop().time()
