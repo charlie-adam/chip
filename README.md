@@ -7,7 +7,7 @@ A professional, highly capable AI assistant with direct access a variety of MCP 
 - Tool Integration: MCP-based tools for Web Search, Google Workspace, and Terminal access.
 - Apple Integration: Direct interaction with Apple services like iMessage and Reminders via iMCP.
 - Memory: Persistent knowledge graph for personal facts.
-- Self-Evolution: Ability to modify its own personality and behavior, including system restarts.
+- Self-Evolution: Ability to modify its own personality, behavior, code & everything else really - Including system restarts.
 
 ## Project Structure
 - chip/: Source code directory.
