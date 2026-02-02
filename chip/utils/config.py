@@ -23,12 +23,16 @@ TTS_VOICE = "aura-2-luna-en"
 SILENCE_THRESHOLD = 1
 MAX_LLM_TURNS = 15
 
-FILLERS = [
-    "Working on it.", "One moment.", "Just a second.", "Let me check.",
-    "Processing.", "Getting that for you.", "Hold on a moment.",
-    "Let me see.", "Checking now.", "Alrighty.", "Sure thing.", "On it.",
-    "Right away.", "I'll take care of that.", "Give me a moment.",
-    "Let me handle that.", "Just a moment please."
+FILLERS_START = [
+    "Let me check.", "One moment.", "Just a second.", 
+    "Checking now.", "On it.", "I'll take care of that.", 
+    "Let me see.", "Right away."
+]
+
+FILLERS_CONTINUED = [
+    "Still working on it.", "Processing...", "Just another moment.",
+    "Still going...", "Crunching the numbers...", "Wrapping this up...",
+    "Almost there...", "Digging a bit deeper..."
 ]
 
 RESTART_TOOL = {

@@ -117,7 +117,7 @@ async def main():
                 startup_complete = False
                 startup_turns = 0
                 
-                while not startup_complete and startup_turns < 5:
+                while not startup_complete and startup_turns < for5:
                     startup_turns += 1
                     response = await services.ask_llm(history, system_instruction=full_system_prompt, tools=all_tools)
                     if not response.candidates: break
@@ -169,7 +169,7 @@ async def main():
                 history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
 
                 try:
-                    for _ in range(config.MAX_LLM_TURNS): 
+                    for loop_index in range(config.MAX_LLM_TURNS): 
                         
                         full_content_parts = [] # We will store the exact parts here
                         tool_calls = []         # We extract calls from those parts for execution
@@ -197,10 +197,20 @@ async def main():
                             break
                         
                         if tool_calls:
-                            filler = random.choice(config.FILLERS)
-                            print(f"[CHIP (Filler)] {filler}")
-                            asyncio.create_task(services.stream_tts(iter([filler])))
-                        
+                            should_speak = False
+                            filler_text = ""
+
+                            if loop_index == 0:
+                                should_speak = True
+                                filler_text = random.choice(config.FILLERS_START)
+                            elif random.random() < 0.2:
+                                should_speak = True
+                                filler_text = random.choice(config.FILLERS_CONTINUED)
+                            
+                            if should_speak:
+                                print(f"[CHIP (Filler)] {filler_text}")
+                                asyncio.create_task(services.stream_tts(iter([filler_text])))
+                                
                         # 3. Parallel Tool Execution
                         tool_tasks = []
                         tool_names = []
