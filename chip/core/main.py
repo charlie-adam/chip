@@ -12,9 +12,10 @@ from google.genai import types
 from mcp.client.stdio import stdio_client
 from mcp import ClientSession
 
-from chip.utils import smalls, config, tools_handler
+from chip.utils import config, tools_handler
 from chip.core import state, services, context_manager
 from chip.audio import audio_engine
+from chip.utils import schema
 
 async def main():
     services.restart_imcp()
@@ -46,6 +47,7 @@ async def main():
     all_tools = [config.RESTART_TOOL]
     tool_to_session = {}
     history = []
+    
 
     try:
         async with AsyncExitStack() as stack:
@@ -60,7 +62,7 @@ async def main():
                     mcp_tools_list = await session.list_tools()
                     for tool in mcp_tools_list.tools:
                         if hasattr(tool, "inputSchema"):
-                            tool.inputSchema = smalls.clean_schema(tool.inputSchema)
+                            tool.inputSchema = schema.clean_schema(tool.inputSchema)
                     
                     formatted_tools = tm.get_openai_tools(mcp_tools_list.tools)
                     for t in mcp_tools_list.tools:
@@ -71,6 +73,77 @@ async def main():
                     print(f"[ERROR] Failed to connect to {server_name}: {e}")
 
             print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
+            state_file = os.path.join("data", "chip_state.json")
+            last_startup = 0
+            if os.path.exists(state_file):
+                with open(state_file, "r") as f:
+                    try:
+                        state_data = json.load(f)
+                        last_startup = state_data.get("last_startup", 0)
+                    except:
+                        last_startup = 0         
+            with open(state_file, "w") as f:
+                json.dump({"last_startup": time.time()}, f)
+            print(f"[SYSTEM] Last Startup: {time.ctime(last_startup)}")
+            if (time.time() - last_startup) > 3600:
+                print("[SYSTEM] Initiating Startup Routine (more than 1 hour since last startup)...")
+                await services.stream_tts(iter(["Initiating Startup Routine"]))
+                
+                startup_prompt = (
+                    f"SYSTEM STARTUP PROTOCOL initiated at {config.TIME} on {config.DATE}. "
+                    "1. Use your tools to list my Google Calendar events for today. "
+                    "2. Check for any unread emails in my threads. "
+                    "3. Load your memory for any important context. "
+                    "4. Analyze the time of day: If it's evening and I had events earlier, assume they are finished. "
+                    "5. Synthesize all this info into a warm, short spoken greeting. "
+                    "Example: 'Welcome back. I see you had a meeting with X earlier, how did that go? You have Y coming up.'"
+                    "(relevant to what data you get, if theres not much - just say 'Welcome back! How can I assist you today?') "
+                )
+                
+                # Inject invisible system instruction as user message
+                history.append(types.Content(role="user", parts=[types.Part.from_text(text=startup_prompt)]))
+                
+                # Loop to handle tool calls autonomously before handing control to user
+                startup_complete = False
+                startup_turns = 0
+                
+                while not startup_complete and startup_turns < 5:
+                    startup_turns += 1
+                    response = await services.ask_llm(history, system_instruction=full_system_prompt, tools=all_tools)
+                    if not response.candidates: break
+                    
+                    candidate = response.candidates[0]
+                    history.append(candidate.content)
+                    
+                    tool_calls = [p.function_call for p in candidate.content.parts if p.function_call]
+                    text_parts = [p.text for p in candidate.content.parts if p.text]
+
+                    # If text exists, it's likely the final summary. Speak it.
+                    for text in text_parts:
+                        print(f"[CHIP (Startup)] {text}")
+                        await services.stream_tts(iter([text]))
+                    
+                    # If no tools are called, we are done with startup
+                    if not tool_calls:
+                        startup_complete = True
+                    else:
+                        # Execute tools (Calendar/Email)
+                        response_parts = []
+                        for fn in tool_calls:
+                            fname, fargs = fn.name, fn.args
+                            session = tool_to_session.get(fname)
+                            res_str = ""
+                            if session:
+                                try:
+                                    print(f"[SYSTEM] Startup Tool: {fname}")
+                                    res = await session.call_tool(fname, fargs)
+                                    res_str = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+                                except Exception as e: res_str = f"Error: {e}"
+                            else: res_str = f"Error: Tool {fname} not found."
+                            response_parts.append(types.Part.from_function_response(name=fname, response={"result": res_str}))
+                        
+                        history.append(types.Content(role="user", parts=response_parts))
+
             loop = asyncio.get_running_loop()
             threading.Thread(target=services.console_listener, args=(loop,), daemon=True).start()
 

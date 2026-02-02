@@ -77,7 +77,10 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 The current date is {DATE} and time {TIME}.
 If you are ever writing a git commit message, end the message with -Chip
 
+Respect your token limit when prompting. (1000000)
 Your config is located at chip/utils/config.py
+
+I use arc browser (data located at ~/Library/Application Support/Arc/StorableSidebar.json).
 """
 
 ALLOWED_FS_PATH = os.path.abspath(".")
