@@ -1,6 +1,6 @@
 # Local AI Assistant (Chip)
 
-A professional, highly capable AI assistant with direct access to local files and Google Workspace.
+A professional, highly capable AI assistant with direct access a variety of MCP servers (see config)
 
 ## Features
 - Voice Interaction: STT via Deepgram, TTS via Deepgram Aura.
