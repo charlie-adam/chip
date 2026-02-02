@@ -115,8 +115,9 @@ async def start_deepgram_stt():
 
 # --- TTS ---
 async def stream_tts(text_iterator):
-    buffer = ""
-    MIN_CHUNK_SIZE = 50 
+    """
+    Receives an iterator of COMPLETE sentences/phrases and streams audio.
+    """
     async def content_generator():
         if hasattr(text_iterator, '__aiter__'):
             async for item in text_iterator:
@@ -124,16 +125,10 @@ async def stream_tts(text_iterator):
         else:
             for item in text_iterator:
                 yield item
-    async for chunk in content_generator():
-        buffer += chunk
-        if len(buffer) > MIN_CHUNK_SIZE or "\n" in buffer:
-            parts = re.split(r'(?<=[.?!])\s+', buffer, maxsplit=1)
-            if len(parts) > 1:
-                sentence, buffer = parts[0], parts[1]
-                if sentence.strip():
-                    await _fetch_audio(sentence)
-    if buffer.strip():
-        await _fetch_audio(buffer)
+                
+    async for text_chunk in content_generator():
+        if not text_chunk.strip(): continue
+        await _fetch_audio(text_chunk)
 
 async def _fetch_audio(text):
     state.set_speaking(True)
@@ -151,41 +146,43 @@ async def _fetch_audio(text):
     except Exception as e:
         print(f"[ERROR] TTS Streaming failed: {e}")
     finally:
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1) 
         state.set_speaking(False)
 
 # --- LLM ---
-async def ask_llm(history, system_instruction=None, tools=None):
+async def ask_llm_stream(history, system_instruction=None, tools=None):
     gemini_tools = _convert_tools_to_gemini(tools) if tools else None
-    config_params = types.GenerateContentConfig(
-        system_instruction=system_instruction,
-        tools=gemini_tools,
-        temperature=0.7
-    )
-    response = await client.aio.models.generate_content(
-        model=config.LLM_MODEL,
-        contents=history,
-        config=config_params
-    )
-    return response
-
-async def stream_llm_response(history, system_instruction=None):
-    config_params = types.GenerateContentConfig(
-        system_instruction=system_instruction
-    )
+    
     stream = await client.aio.models.generate_content_stream(
         model=config.LLM_MODEL,
         contents=history,
-        config=config_params
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            tools=gemini_tools,
+            temperature=0.7
+        )
     )
-    async def generator():
-        full_text = ""
-        print("[CHIP] ", end="", flush=True)
-        async for chunk in stream:
-            if chunk.text:
-                text = chunk.text
-                full_text += text
-                print(text, end="", flush=True)
-                yield text
-        print()
-    return generator()
+
+    accumulated_parts = []
+    text_buffer = ""
+
+    async for chunk in stream:
+        if chunk.candidates and chunk.candidates[0].content.parts:
+            for part in chunk.candidates[0].content.parts:
+                accumulated_parts.append(part)
+
+        if chunk.text:
+            text = chunk.text
+            text_buffer += text
+            
+            sentences = re.split(r'(?<=[.?!])\s+', text_buffer)
+            
+            if len(sentences) > 1:
+                # Yield all COMPLETE sentences
+                for sentence in sentences[:-1]:
+                    if sentence.strip():
+                        yield {"type": "text", "content": sentence.strip()}
+                text_buffer = sentences[-1]
+    if text_buffer.strip():
+        yield {"type": "text", "content": text_buffer.strip()}
+    yield {"type": "complete_message", "content": accumulated_parts}

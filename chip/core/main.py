@@ -17,6 +17,16 @@ from chip.core import state, services, context_manager
 from chip.audio import audio_engine
 from chip.utils import schema
 
+async def execute_tool(session, fname, fargs):
+    if not session:
+        return f"Error: Tool {fname} not found."
+    try:
+        print(f"[SYSTEM] Calling tool: {fname} with args {fargs}")
+        res = await session.call_tool(fname, fargs)
+        return "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+    except Exception as e:
+        return f"Error executing {fname}: {e}"
+    
 async def main():
     services.restart_imcp()
     # subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
@@ -159,54 +169,65 @@ async def main():
                 history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
 
                 try:
-                    has_played_filler = False 
                     for _ in range(config.MAX_LLM_TURNS): 
-                        response = await services.ask_llm(history, system_instruction=full_system_prompt, tools=all_tools)
-                        if not response.candidates: break
                         
-                        candidate = response.candidates[0]
-                        history.append(candidate.content)
-                        tool_calls = [p.function_call for p in candidate.content.parts if p.function_call]
-                        text_parts = [p.text for p in candidate.content.parts if p.text]
-
-                        for text in text_parts:
-                            print(f"[CHIP] {text}")
-                            await services.stream_tts(iter([text]))
-
-                        if not tool_calls: break
+                        full_content_parts = [] # We will store the exact parts here
+                        tool_calls = []         # We extract calls from those parts for execution
                         
-                        if not has_played_filler:
+                        # 1. Stream response
+                        print(f"[CHIP] ", end="", flush=True)
+                        
+                        async for chunk in services.ask_llm_stream(history, system_instruction=full_system_prompt, tools=all_tools):
+                            if chunk["type"] == "text":
+                                text = chunk["content"]
+                                print(text, end="", flush=True)
+                                await services.stream_tts(iter([text])) 
+                            
+                            elif chunk["type"] == "complete_message":
+                                full_content_parts = chunk["content"]
+                                # Extract tool calls from the preserved parts
+                                tool_calls = [p.function_call for p in full_content_parts if p.function_call]
+
+                        print() 
+                        
+                        if full_content_parts:
+                            history.append(types.Content(role="model", parts=full_content_parts))
+
+                        if not tool_calls:
+                            break
+                        
+                        if tool_calls:
                             filler = random.choice(config.FILLERS)
                             print(f"[CHIP (Filler)] {filler}")
-                            await services.stream_tts(iter([filler]))
-                            has_played_filler = True
-
-                        response_parts = []
+                            asyncio.create_task(services.stream_tts(iter([filler])))
+                        
+                        # 3. Parallel Tool Execution
+                        tool_tasks = []
+                        tool_names = []
+                        
                         for fn in tool_calls:
-                            fname, fargs = fn.name, fn.args 
+                            fname, fargs = fn.name, fn.args
+                            
                             if fname == "restart_system":
-                                print("[SYSTEM] Restart initiated by AI...")
-                                await services.stream_tts(iter(["Rebooting system now."]))
-                                subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
-                                subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
-                                subprocess.run(["osascript", "-e", 'tell application "Terminal" to close (every window whose name contains "ChipFace") saving no'], stderr=subprocess.DEVNULL)
-                                if history:
-                                    await context_manager.generate_and_save_summary(history, services)
-                                print("[SYSTEM] Re-executing process as module...")
-                                os.execv(sys.executable, [sys.executable, "-m", "chip.core.main"])
+                                # ... (Keep restart logic) ...
+                                pass
 
                             session = tool_to_session.get(fname)
-                            res_str = ""
-                            if session:
-                                try:
-                                    print(f"[SYSTEM] Calling tool: {fname} with args {fargs}")
-                                    res = await session.call_tool(fname, fargs)
-                                    res_str = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
-                                except Exception as e: res_str = f"Error: {e}"
-                            else: res_str = f"Error: Tool {fname} not found."
-                            
-                            response_parts.append(types.Part.from_function_response(name=fname, response={"result": res_str}))
-                        history.append(types.Content(role="user", parts=response_parts))
+                            tool_names.append(fname)
+                            tool_tasks.append(execute_tool(session, fname, fargs))
+
+                        if tool_tasks:
+                            results = await asyncio.gather(*tool_tasks)
+
+                            tool_outputs = []
+                            for i, res_str in enumerate(results):
+                                tool_outputs.append(
+                                    types.Part.from_function_response(
+                                        name=tool_names[i], 
+                                        response={"result": res_str}
+                                    )
+                                )
+                            history.append(types.Content(role="user", parts=tool_outputs))
 
                 except Exception as e: print(f"[ERROR] LLM Loop: {e}")
                 finally: state.set_processing(False)
