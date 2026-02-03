@@ -17,6 +17,29 @@ from chip.core import state, services, context_manager
 from chip.audio import audio_engine
 from chip.utils import schema
 
+def safe_trim_history(history, max_length=15):
+    """
+    Trims history to roughly max_length, but ensures we always start 
+    with a clean User message (not a Tool Response) to prevent 400 Errors.
+    """
+    if len(history) <= max_length:
+        return history
+
+    start_index = len(history) - max_length
+    
+    while start_index < len(history):
+        message = history[start_index]
+        
+        if message.role == "user":
+            is_tool_response = any(part.function_response for part in message.parts)
+            
+            if not is_tool_response:
+                return history[start_index:]
+        
+        start_index += 1
+
+    return history[-2:]
+
 async def execute_tool(session, fname, fargs):
     if not session:
         return f"Error: Tool {fname} not found."
@@ -99,6 +122,7 @@ async def main():
             with open(state_file, "w") as f:
                 json.dump({"last_startup": time.time()}, f)
             print(f"[SYSTEM] Last Startup: {time.ctime(last_startup)}")
+            
             if (time.time() - last_startup) > 3600:
                 print("[SYSTEM] Initiating Startup Routine (more than 1 hour since last startup)...")
                 await services.stream_tts(iter(["Initiating Startup Routine"]))
@@ -121,7 +145,7 @@ async def main():
                 startup_complete = False
                 startup_turns = 0
                 
-                while not startup_complete and startup_turns < for5:
+                while not startup_complete and startup_turns < 5:
                     startup_turns += 1
                     response = await services.ask_llm(history, system_instruction=full_system_prompt, tools=all_tools)
                     if not response.candidates: break
@@ -140,6 +164,13 @@ async def main():
                     # If no tools are called, we are done with startup
                     if not tool_calls:
                         startup_complete = True
+                        
+                        # FLUSH HISTORY
+                        # Once startup is done and the greeting is spoken, we wipe the memory.
+                        # This removes the massive startup prompt and raw tool data.
+                        history = []
+                        print("[SYSTEM] Startup context flushed to reduce bloat.")
+
                     else:
                         # Execute tools (Calendar/Email)
                         response_parts = []
@@ -165,15 +196,14 @@ async def main():
                 input_data = await state.input_queue.get()
                 
                 user_input = ""
-                should_speak = True # Default to speaking (e.g., for system triggers)
+                should_speak = True # Default to speaking
 
                 if isinstance(input_data, dict):
                     user_input = input_data.get("text", "")
-                    # If input came from console/typing, keep output quiet
+                    # QUIET MODE: If input came from text, don't speak the response
                     if input_data.get("source") == "text":
                         should_speak = False
                 else:
-                    # Fallback for legacy string inputs
                     user_input = str(input_data)
 
                 if state.IS_PROCESSING: continue
@@ -181,11 +211,12 @@ async def main():
                 
                 clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
                 
-                # Log based on source for clarity
                 if not user_input.startswith("[USER]"):
                     print(f"[USER (Text)] {clean_text}")
 
                 history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
+                
+                history = safe_trim_history(history, max_length=14)
 
                 try:
                     for loop_index in range(config.MAX_LLM_TURNS): 
