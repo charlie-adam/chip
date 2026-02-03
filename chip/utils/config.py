@@ -8,7 +8,7 @@ load_dotenv()
 
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
+SUPERMEMORY_BEARER = os.getenv("SUPERMEMORY_BEARER", "")
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.abspath("credentials.json")
 
 if not GEMINI_API_KEY or not DEEPGRAM_API_KEY:
@@ -107,13 +107,13 @@ MCP_SERVERS = {
             "GOOGLE_APPLICATION_CREDENTIALS": os.path.abspath("credentials.json")
         }
     },
-    "memory": {
+    "supermemory-mcp": {
         "command": "npx",
-        "args": [
-            "-y",
-            "@modelcontextprotocol/server-memory",
-            os.path.abspath("memory.json")
-        ]
+        "args": ["-y", "mcp-remote", "https://mcp.supermemory.ai/mcp"],
+        "env": {},
+        "headers": {
+            "Authorization": f"Bearer {SUPERMEMORY_BEARER}"
+        }
     },
     "terminal": {
         "command": "uv",
