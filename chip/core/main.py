@@ -191,7 +191,10 @@ async def main():
 
             loop = asyncio.get_running_loop()
             threading.Thread(target=services.console_listener, args=(loop,), daemon=True).start()
-
+            services._get_or_create_cache(full_system_prompt, all_tools)
+            #clear the terminal, log chip Awake (With date Sat 2 Feb 14:23:45 format)
+            os.system('clear')
+            print(f"[SYSTEM] Chip Awake - {time.strftime('%a %d %b %H:%M:%S %Y')}")
             while True:
                 input_data = await state.input_queue.get()
                 

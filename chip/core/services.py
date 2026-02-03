@@ -218,7 +218,7 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
             cached = u.cached_content_token_count if hasattr(u, 'cached_content_token_count') else 0
             new_bits = u.prompt_token_count - cached
             
-            print(f"\n\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Biled: {new_bits} | Output: {u.candidates_token_count}\033[0m")
+            print(f"\n\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
             printed_usage = True
 
         if chunk.candidates and chunk.candidates[0].content.parts:
@@ -268,6 +268,6 @@ async def ask_llm(history, system_instruction=None, tools=None):
         u = response.usage_metadata
         cached = u.cached_content_token_count if hasattr(u, 'cached_content_token_count') else 0
         new_bits = u.prompt_token_count - cached
-        print(f"\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Biled: {new_bits} | Output: {u.candidates_token_count}\033[0m")
+        print(f"\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
     
     return response
