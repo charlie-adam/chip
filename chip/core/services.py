@@ -15,6 +15,7 @@ from chip.utils import config
 from chip.core import state
 
 client = genai.Client(api_key=config.GEMINI_API_KEY)
+httpx_client = httpx.AsyncClient(timeout=10.0)
 
 ACTIVE_CACHE = None
 
@@ -57,14 +58,8 @@ def _convert_tools_to_gemini(openai_tools):
     return [types.Tool(function_declarations=declarations)]
 
 def _get_or_create_cache(system_instruction, tools):
-    """
-    Handles explicit caching. 
-    1. If no cache exists, creates one with the heavy tools/system prompt.
-    2. If cache exists, updates the TTL (Time to Live) to keep it alive.
-    """
     global ACTIVE_CACHE
     gemini_tools = _convert_tools_to_gemini(tools) if tools else None
-
     ttl_seconds = "600s"
 
     try:
@@ -172,21 +167,17 @@ async def _fetch_audio(text):
         "Content-Type": "application/json"
     }
     try:
-        async with httpx.AsyncClient() as client_http:
-            async with client_http.stream("POST", url, headers=headers, json={"text": text}) as r:
-                async for chunk in r.aiter_bytes(chunk_size=2048):
-                    if chunk:
-                        state.audio_queue.put(chunk)
+        async with httpx_client.stream("POST", url, headers=headers, json={"text": text}) as r:
+            async for chunk in r.aiter_bytes(chunk_size=2048):
+                if chunk:
+                    state.audio_queue.put(chunk)
     except Exception as e:
         print(f"[ERROR] TTS Streaming failed: {e}")
     finally:
-        await asyncio.sleep(0.1) 
         state.set_speaking(False)
 
 async def ask_llm_stream(history, system_instruction=None, tools=None):
-    
     cache_name = _get_or_create_cache(system_instruction, tools)
-    
     generate_config = None
 
     if cache_name:
@@ -217,7 +208,6 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
             u = chunk.usage_metadata
             cached = u.cached_content_token_count if hasattr(u, 'cached_content_token_count') else 0
             new_bits = u.prompt_token_count - cached
-            
             print(f"\n\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
             printed_usage = True
 
@@ -229,7 +219,8 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
             text = chunk.text
             text_buffer += text
             
-            sentences = re.split(r'(?<=[.?!])\s+', text_buffer)
+            # Split on terminal punctuation followed by space
+            sentences = re.split(r'(?<=[.?!;:])\s+', text_buffer)
             
             if len(sentences) > 1:
                 for sentence in sentences[:-1]:
@@ -241,7 +232,6 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
     yield {"type": "complete_message", "content": accumulated_parts}
 
 async def ask_llm(history, system_instruction=None, tools=None):
-    # 1. Try to use Cache
     cache_name = _get_or_create_cache(system_instruction, tools)
     generate_config = None
 

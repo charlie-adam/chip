@@ -27,7 +27,7 @@ class AudioEngine:
         self._leftover_data = b''
         
         self._is_starting_phrase = True
-        self._buffer_threshold = 3  # Wait for 3 chunks before playing (Fixes crackling)
+        self._buffer_threshold = 2
         self._has_started_playing = False
 
     def start(self):

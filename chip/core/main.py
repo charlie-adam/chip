@@ -17,6 +17,28 @@ from chip.core import state, services, context_manager
 from chip.audio import audio_engine
 from chip.utils import schema
 
+def sanitize_tool_outputs(history):
+    """
+    Scans history for large Tool Responses. 
+    If a response is older than the very last turn, shrink it.
+    This ensures the AI sees the data ONCE (to answer), but doesn't keep paying for it.
+    """
+    for i in range(len(history) - 2):
+        message = history[i]
+        
+        if message.role == "user":
+            for part in message.parts:
+                if part.function_response:
+                    current_response = part.function_response.response
+                    if "result" in current_response and len(str(current_response["result"])) > 500:
+                        # REPLACE IT WITH A STUB
+                        original_len = len(str(current_response["result"]))
+                        part.function_response.response = {
+                            "result": f"[Output Truncated - Original Length: {original_len} chars]. Context: Tool executed successfully."
+                        }
+                        print(f"[SYSTEM] Optimized history: Shrunk tool output from {original_len} to summary.")
+    return history
+
 def safe_trim_history(history, max_length=15):
     """
     Trims history to roughly max_length, but ensures we always start 
@@ -46,7 +68,21 @@ async def execute_tool(session, fname, fargs):
     try:
         print(f"[SYSTEM] Calling tool: {fname} with args {fargs}")
         res = await session.call_tool(fname, fargs)
-        return "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+        
+        full_text = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+        MAX_CHARS = 8000 
+        
+        if len(full_text) > MAX_CHARS:
+            truncated_text = full_text[:MAX_CHARS]
+            warning_msg = (
+                f"\n\n[SYSTEM ERROR] Output too large ({len(full_text)} characters). "
+                f"Truncated to first {MAX_CHARS} characters to save costs.\n"
+                "If you need to read this file, use 'head', 'tail', or 'grep' instead of 'cat'."
+            )
+            return truncated_text + warning_msg
+            
+        return full_text
+
     except Exception as e:
         return f"Error executing {fname}: {e}"
     
@@ -300,6 +336,7 @@ async def main():
                                     )
                                 )
                             history.append(types.Content(role="user", parts=tool_outputs))
+                            history = sanitize_tool_outputs(history)
 
                 except Exception as e: print(f"[ERROR] LLM Loop: {e}")
                 finally: state.set_processing(False)
