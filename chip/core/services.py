@@ -24,6 +24,17 @@ def console_listener(loop):
             if text.strip():
                 asyncio.run_coroutine_threadsafe(state.input_queue.put(text.strip()), loop)
         except: break
+    
+
+def console_listener(loop):
+    while True:
+        try:
+            text = sys.stdin.readline()
+            if text.strip():
+                # Change: Wrap in dict with source
+                payload = {"text": text.strip(), "source": "text"}
+                asyncio.run_coroutine_threadsafe(state.input_queue.put(payload), loop)
+        except: break
 
 def restart_imcp():
     print("[SYSTEM] Restarting iMCP to ensure clean connection...")
@@ -89,7 +100,8 @@ async def start_deepgram_stt():
                                 if full_text:
                                     sys.stdout.write("\r\033[K")
                                     print(f"[USER] {full_text}")
-                                    await state.input_queue.put(f"[USER] {full_text}")
+                                    payload = {"text": f"[USER] {full_text}", "source": "voice"}
+                                    await state.input_queue.put(payload)
                             elif buffer and silence_duration > 0.5:
                                 remaining = round(TURN_TIMEOUT - silence_duration, 1)
                                 sys.stdout.write(f"\r[WAITING {remaining}s] {' '.join(buffer)}")

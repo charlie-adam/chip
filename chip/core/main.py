@@ -84,6 +84,8 @@ async def main():
 
             print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
             state_file = os.path.join("data", "chip_state.json")
+            
+            #Get Start Time
             last_startup = 0
             if os.path.exists(state_file):
                 with open(state_file, "r") as f:
@@ -92,6 +94,8 @@ async def main():
                         last_startup = state_data.get("last_startup", 0)
                     except:
                         last_startup = 0         
+            
+            #Set Start Time
             with open(state_file, "w") as f:
                 json.dump({"last_startup": time.time()}, f)
             print(f"[SYSTEM] Last Startup: {time.ctime(last_startup)}")
@@ -158,11 +162,26 @@ async def main():
             threading.Thread(target=services.console_listener, args=(loop,), daemon=True).start()
 
             while True:
-                user_input = await state.input_queue.get()
+                input_data = await state.input_queue.get()
+                
+                user_input = ""
+                should_speak = True # Default to speaking (e.g., for system triggers)
+
+                if isinstance(input_data, dict):
+                    user_input = input_data.get("text", "")
+                    # If input came from console/typing, keep output quiet
+                    if input_data.get("source") == "text":
+                        should_speak = False
+                else:
+                    # Fallback for legacy string inputs
+                    user_input = str(input_data)
+
                 if state.IS_PROCESSING: continue
                 state.set_processing(True)
                 
                 clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
+                
+                # Log based on source for clarity
                 if not user_input.startswith("[USER]"):
                     print(f"[USER (Text)] {clean_text}")
 
@@ -171,21 +190,21 @@ async def main():
                 try:
                     for loop_index in range(config.MAX_LLM_TURNS): 
                         
-                        full_content_parts = [] # We will store the exact parts here
-                        tool_calls = []         # We extract calls from those parts for execution
+                        full_content_parts = [] 
+                        tool_calls = []         
                         
-                        # 1. Stream response
                         print(f"[CHIP] ", end="", flush=True)
                         
                         async for chunk in services.ask_llm_stream(history, system_instruction=full_system_prompt, tools=all_tools):
                             if chunk["type"] == "text":
                                 text = chunk["content"]
                                 print(text, end="", flush=True)
-                                await services.stream_tts(iter([text])) 
+                                
+                                if should_speak:
+                                    await services.stream_tts(iter([text])) 
                             
                             elif chunk["type"] == "complete_message":
                                 full_content_parts = chunk["content"]
-                                # Extract tool calls from the preserved parts
                                 tool_calls = [p.function_call for p in full_content_parts if p.function_call]
 
                         print() 
@@ -197,21 +216,21 @@ async def main():
                             break
                         
                         if tool_calls:
-                            should_speak = False
-                            filler_text = ""
-
-                            if loop_index == 0:
-                                should_speak = True
-                                filler_text = random.choice(config.FILLERS_START)
-                            elif random.random() < 0.2:
-                                should_speak = True
-                                filler_text = random.choice(config.FILLERS_CONTINUED)
-                            
                             if should_speak:
-                                print(f"[CHIP (Filler)] {filler_text}")
-                                asyncio.create_task(services.stream_tts(iter([filler_text])))
+                                filler_active = False
+                                filler_text = ""
+
+                                if loop_index == 0:
+                                    filler_active = True
+                                    filler_text = random.choice(config.FILLERS_START)
+                                elif random.random() < 0.2:
+                                    filler_active = True
+                                    filler_text = random.choice(config.FILLERS_CONTINUED)
                                 
-                        # 3. Parallel Tool Execution
+                                if filler_active:
+                                    print(f"[CHIP (Filler)] {filler_text}")
+                                    asyncio.create_task(services.stream_tts(iter([filler_text])))
+                                
                         tool_tasks = []
                         tool_names = []
                         
@@ -220,7 +239,9 @@ async def main():
                             
                             if fname == "restart_system":
                                 print("[SYSTEM] Restart initiated by AI...")
-                                await services.stream_tts(iter(["Rebooting system now."]))
+                                if should_speak:
+                                    await services.stream_tts(iter(["Rebooting system now."]))
+                                    
                                 subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
                                 subprocess.run(["pkill", "-f", "chip_face.py"], stderr=subprocess.DEVNULL)
                                 subprocess.run(["osascript", "-e", 'tell application "Terminal" to close (every window whose name contains "ChipFace") saving no'], stderr=subprocess.DEVNULL)
