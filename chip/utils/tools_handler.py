@@ -30,3 +30,30 @@ class ToolManager:
                 }
             })
         return openai_tools
+
+async def execute_tool(session, fname, fargs):
+    """
+    Executes a tool on the given MCP session with safety truncation.
+    """
+    if not session:
+        return f"Error: Tool {fname} not found."
+    try:
+        print(f"[SYSTEM] Calling tool: {fname} with args {fargs}")
+        res = await session.call_tool(fname, fargs)
+        
+        full_text = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+        MAX_CHARS = 8000 
+        
+        if len(full_text) > MAX_CHARS:
+            truncated_text = full_text[:MAX_CHARS]
+            warning_msg = (
+                f"\n\n[SYSTEM ERROR] Output too large ({len(full_text)} characters). "
+                f"Truncated to first {MAX_CHARS} characters to save costs.\n"
+                "If you need to read this file, use 'head', 'tail', or 'grep' instead of 'cat'."
+            )
+            return truncated_text + warning_msg
+            
+        return full_text
+
+    except Exception as e:
+        return f"Error executing {fname}: {e}"
