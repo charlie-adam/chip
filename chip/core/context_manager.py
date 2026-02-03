@@ -29,29 +29,27 @@ def load_context():
     return personality, last_summary
 
 async def generate_and_save_summary(full_history, services_module):
-    """
-    Takes the chat history, asks the LLM to summarize it, 
-    and saves it to last_session.txt.
-    """
     print("\n[SYSTEM] Generating session summary...")
     
-    summary_request = "Summarize the key topics, decisions, and user preferences from our conversation above. Keep it concise (under 100 words) so you remember it for next time."
+    summary_request = "Summarise the key topics, decisions, and user preferences from our conversation above. Keep it concise (under 100 words) so you remember it for next time."
     
     full_history.append(types.Content(role="user", parts=[types.Part.from_text(text=summary_request)]))
     
     try:
         response = await services_module.ask_llm(
             full_history, 
-            system_instruction="You are a helpful summarizer.",
+            system_instruction="You are a helpful summariser.",
             tools=[] 
         )
-        
-        if response.candidates:
+        if response.candidates and response.candidates[0].content.parts:
             summary_text = response.candidates[0].content.parts[0].text
             
-            with open(SUMMARY_FILE, "w") as f:
-                f.write(summary_text)
-            
-            print(f"[SYSTEM] Summary saved: {summary_text[:50]}...")
+            if summary_text and isinstance(summary_text, str):
+                with open(SUMMARY_FILE, "w") as f:
+                    f.write(summary_text)
+                print(f"[SYSTEM] Summary saved: {summary_text[:50]}...")
+            else:
+                print("[SYSTEM] Skipped: Model returned empty text.")
+                
     except Exception as e:
         print(f"[ERROR] Could not save summary: {e}")

@@ -35,8 +35,13 @@ def restart_imcp():
     subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
     time.sleep(1)
     try:
-        subprocess.run(["open", "/Applications/iMCP.app"], check=True)
-        print("[SYSTEM] iMCP launching... waiting 2s for initialization...")
+        subprocess.run(
+            ["open", "/Applications/iMCP.app"], 
+            check=True, 
+            stdout=subprocess.DEVNULL, 
+            stderr=subprocess.DEVNULL
+        )
+        print("[SYSTEM] iMCP launching... waiting 2s for initialisation...")
         time.sleep(2) 
     except Exception as e:
         print(f"[ERROR] Failed to launch iMCP: {e}")

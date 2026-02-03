@@ -1,6 +1,6 @@
 from google.genai import types
 
-def sanitize_tool_outputs(history):
+def sanitise_tool_outputs(history):
     """
     Scans history for large Tool Responses and truncates them to save tokens.
     """
@@ -17,7 +17,7 @@ def sanitize_tool_outputs(history):
                         }
     return history
 
-def safe_trim_history(history, max_length=15):
+def safe_trim_history(history, max_length=14):
     """
     Trims history but ensures we always start with a clean User message.
     """

@@ -118,7 +118,7 @@ async def main():
                                 for i, res in enumerate(results)
                             ]
                             history.append(types.Content(role="user", parts=tool_outputs))
-                            history = history_utils.sanitize_tool_outputs(history)
+                            history = history_utils.sanitise_tool_outputs(history)
 
                 except Exception as e: print(f"[ERROR] LLM Loop: {e}")
                 finally: state.set_processing(False)

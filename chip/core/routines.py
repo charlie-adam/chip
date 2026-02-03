@@ -34,7 +34,7 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
         "1. Use your tools to list my Google Calendar events for today. "
         "2. Check for any unread emails. "
         "3. Load memory for context. "
-        "4. Synthesize into a warm, short spoken greeting. "
+        "4. Synthesise into a warm, short spoken greeting. "
     )
     
     history.append(types.Content(role="user", parts=[types.Part.from_text(text=startup_prompt)]))
