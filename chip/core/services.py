@@ -177,7 +177,10 @@ async def _fetch_audio(text):
         state.set_speaking(False)
 
 async def ask_llm_stream(history, system_instruction=None, tools=None):
+    
+    # 1. Try to use Cache
     cache_name = _get_or_create_cache(system_instruction, tools)
+    
     generate_config = None
 
     if cache_name:
@@ -214,21 +217,21 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
         if chunk.candidates and chunk.candidates[0].content.parts:
             for part in chunk.candidates[0].content.parts:
                 accumulated_parts.append(part)
+                
+                if part.text:
+                    text_buffer += part.text
+                    
+                    sentences = re.split(r'(?<=[.?!])\s+', text_buffer)
+                    
+                    if len(sentences) > 1:
+                        for sentence in sentences[:-1]:
+                            if sentence.strip():
+                                yield {"type": "text", "content": sentence.strip()}
+                        text_buffer = sentences[-1]
 
-        if chunk.text:
-            text = chunk.text
-            text_buffer += text
-            
-            # Split on terminal punctuation followed by space
-            sentences = re.split(r'(?<=[.?!;:])\s+', text_buffer)
-            
-            if len(sentences) > 1:
-                for sentence in sentences[:-1]:
-                    if sentence.strip():
-                        yield {"type": "text", "content": sentence.strip()}
-                text_buffer = sentences[-1]
     if text_buffer.strip():
         yield {"type": "text", "content": text_buffer.strip()}
+    
     yield {"type": "complete_message", "content": accumulated_parts}
 
 async def ask_llm(history, system_instruction=None, tools=None):
