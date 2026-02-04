@@ -31,3 +31,6 @@ def _update_state(updates):
 input_queue = asyncio.Queue()  # Text from STT -> LLM
 mic_queue = asyncio.Queue()    # Audio from Mic -> Deepgram STT
 audio_queue = queue.Queue()    # Audio from TTS -> Speakers
+
+IS_SPEAKING = False
+IS_PROCESSING = False
