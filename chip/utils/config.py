@@ -22,6 +22,8 @@ LLM_MODEL = "gemini-3-flash-preview"
 TTS_VOICE = "aura-2-luna-en"
 SILENCE_THRESHOLD = 0.7
 MAX_LLM_TURNS = 15
+STATE_JSON = "chip_state.json"
+CACHE_SECONDS = 86400
 
 FILLERS_START = [
     "Let me check.", "One moment.", "Just a second.", 

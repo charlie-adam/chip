@@ -41,8 +41,8 @@ def restart_imcp():
             stdout=subprocess.DEVNULL, 
             stderr=subprocess.DEVNULL
         )
-        print("[SYSTEM] iMCP launching... waiting 2s for initialisation...")
-        time.sleep(2) 
+        print("[SYSTEM] iMCP launching... waiting 1s for initialisation...")
+        time.sleep(1) 
     except Exception as e:
         print(f"[ERROR] Failed to launch iMCP: {e}")
 
@@ -62,29 +62,56 @@ def _convert_tools_to_gemini(openai_tools):
         ))
     return [types.Tool(function_declarations=declarations)]
 
+STATE_FILE = f"data/{config.STATE_JSON}"
+
 def _get_or_create_cache(system_instruction, tools):
     global ACTIVE_CACHE
     gemini_tools = _convert_tools_to_gemini(tools) if tools else None
-    ttl_seconds = "600s"
+    ttl_seconds = f"{config.CACHE_SECONDS}s"
 
-    try:
-        if ACTIVE_CACHE is None:
-            print("\033[93m[CACHE] Uploading Tools & System Prompt to Gemini Cache...\033[0m")
-            ACTIVE_CACHE = client.caches.create(
-                model=config.LLM_MODEL,
-                config=types.CreateCachedContentConfig(
-                    display_name="chip_session_cache",
-                    system_instruction=system_instruction,
-                    tools=gemini_tools,
-                    ttl=ttl_seconds
-                )
-            )
-            print(f"\033[92m[CACHE] Created: {ACTIVE_CACHE.name}\033[0m")
-        else:
+    if ACTIVE_CACHE is None:
+        state_data = state._load_state()
+        cache_name = state_data.get("cache_name")
+        
+        if cache_name:
+            try:
+                # Verify cache actually exists on server
+                ACTIVE_CACHE = client.caches.get(name=cache_name)
+                print(f"\033[92m[CACHE] Resumed: {ACTIVE_CACHE.name}\033[0m")
+            except Exception:
+                # Silent fail: Cache expired/deleted. Proceed to create new.
+                ACTIVE_CACHE = None
+
+    # 2. Update TTL if cache exists
+    if ACTIVE_CACHE:
+        try:
             client.caches.update(
                 name=ACTIVE_CACHE.name,
                 config=types.UpdateCachedContentConfig(ttl=ttl_seconds)
             )
+            return ACTIVE_CACHE.name
+        except Exception:
+            print("[CACHE] Refresh failed. Recreating...")
+            ACTIVE_CACHE = None
+
+    try:
+        print("\033[93m[CACHE] Creating new Gemini Cache...\033[0m")
+        ACTIVE_CACHE = client.caches.create(
+            model=config.LLM_MODEL,
+            config=types.CreateCachedContentConfig(
+                display_name="chip_session_cache",
+                system_instruction=system_instruction,
+                tools=gemini_tools,
+                ttl=ttl_seconds
+            )
+        )
+        print(f"\033[92m[CACHE] Created: {ACTIVE_CACHE.name}\033[0m")
+
+        state._update_state({
+            "cache_name": ACTIVE_CACHE.name,
+            "cache_created_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+        })
+        
         return ACTIVE_CACHE.name
 
     except Exception as e:

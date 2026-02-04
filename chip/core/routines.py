@@ -3,23 +3,16 @@ import time
 import json
 from google.genai import types
 from chip.utils import config
+from chip.core import state
 
 async def run_startup_routine(services, history, system_prompt, all_tools, tool_to_session):
     """
     Checks last startup time. If > 1 hour, runs the autonomous check-in loop.
     """
-    state_file = os.path.join("data", "chip_state.json")
-    last_startup = 0
+    state_data = state._load_state()
+    last_startup = state_data.get("last_startup", 0)
     
-    if os.path.exists(state_file):
-        with open(state_file, "r") as f:
-            try:
-                state_data = json.load(f)
-                last_startup = state_data.get("last_startup", 0)
-            except: pass         
-    
-    with open(state_file, "w") as f:
-        json.dump({"last_startup": time.time()}, f)
+    state._update_state({"last_startup": time.time()})
     
     print(f"[SYSTEM] Last Startup: {time.ctime(last_startup)}")
     
