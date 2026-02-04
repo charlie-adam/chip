@@ -38,11 +38,15 @@ async def generate_and_save_summary(full_history, services_module):
     try:
         response = await services_module.ask_llm(
             full_history, 
-            system_instruction="You are a helpful summariser.",
+            system_instruction="You are a helpful summariser. DO NOT use functions. Respond only with plain text.",
             tools=[] 
         )
         if response.candidates and response.candidates[0].content.parts:
-            summary_text = response.candidates[0].content.parts[0].text
+            part = response.candidates[0].content.parts[0]
+            if part.text:
+                summary_text = part.text
+            elif part.function_call:
+                summary_text = part.function_call.args.get('content', '')
             
             if summary_text and isinstance(summary_text, str):
                 with open(SUMMARY_FILE, "w") as f:

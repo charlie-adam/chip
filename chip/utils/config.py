@@ -24,6 +24,7 @@ SILENCE_THRESHOLD = 0.7
 MAX_LLM_TURNS = 15
 STATE_JSON = "chip_state.json"
 CACHE_SECONDS = 86400
+SPEAK_MODE = "always" #always, never, dynamic
 
 FILLERS_START = [
     "Let me check.", "One moment.", "Just a second.", 
@@ -90,7 +91,7 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 - **Human Interaction**: If you are about to perform an action that would affect a human (even just sending an email or message), ALWAYS confirm with the user first.
 The current date is {DATE} and time {TIME}.
 If you are ever writing a git commit message, end the message with -Chip
-Your config is located at chip/utils/config.py
+Your config is located at chip/utils/config.py (Always check here first if the user asks about your settings).
 """
 
 ALLOWED_FS_PATH = os.path.abspath(".")

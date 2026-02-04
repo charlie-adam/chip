@@ -23,7 +23,7 @@ async def main():
     asyncio.create_task(services.start_deepgram_stt())
 
     personality_text, last_summary = context_manager.load_context()
-    full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### SETTINGS:\n{personality_text}\n\n### MEMORY:\n{last_summary}"
+    full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### SETTINGS:\n{personality_text}\n\n### LAST SESSION:\n{last_summary}"
 
     tm = tools_handler.ToolManager(config.MCP_SERVERS)
     base_tools = [config.RESTART_TOOL]
@@ -51,6 +51,8 @@ async def main():
                 
                 user_input = input_data.get("text", "") if isinstance(input_data, dict) else str(input_data)
                 should_speak = False if isinstance(input_data, dict) and input_data.get("source") == "text" else True
+                if (config.SPEAK_MODE == "always"): should_speak = True
+                if (config.SPEAK_MODE == "never"): should_speak = False
 
                 if state.IS_PROCESSING: continue
                 state.set_processing(True)
