@@ -32,5 +32,14 @@ input_queue = asyncio.Queue()  # Text from STT -> LLM
 mic_queue = asyncio.Queue()    # Audio from Mic -> Deepgram STT
 audio_queue = queue.Queue()    # Audio from TTS -> Speakers
 
+# Internal states
 IS_SPEAKING = False
 IS_PROCESSING = False
+
+def set_processing(val):
+    global IS_PROCESSING
+    IS_PROCESSING = val
+
+def set_speaking(val):
+    global IS_SPEAKING
+    IS_SPEAKING = val
