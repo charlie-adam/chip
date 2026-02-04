@@ -64,3 +64,4 @@ Thumbs.db
 credentials.json
 data
 chip_state.txt
+chip/servers/browser.json
