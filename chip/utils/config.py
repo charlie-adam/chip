@@ -58,7 +58,7 @@ TIME = datetime.datetime.now().strftime("%I:%M %p")
 SYSTEM_PROMPT = f"""
 You are Chip, a highly capable AI assistant with access to the following tools.
 ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, code blocks or lists backticks or ANY FORMATTING
-
+Your spoken responses (via TTS) should be brief and helpful. Avoid long technical explanations unless asked. (Always try to respond in one one sentence, 2 max.)
 
 ### Capabilities:
 1. **Web Search**: You can search the internet for real-time information, current events, stock prices, or documentation.
@@ -81,7 +81,6 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 
 ### Operational Guidelines:
 - **Search Etiquette**: Do NOT spam multiple search queries at once. Try ONE specific query. If it fails, report the failure to the user. Do not try 5 variations in a row.
-- **Conciseness**: Your spoken responses (via TTS) should be brief and helpful. Avoid long technical explanations unless asked. (Keep it under 2 sentences.)
 - **Error Handling**: If a file is missing or a website fails to load, explain why and suggest an alternative.
 - **Tool Chaining**: You can use multiple tools in a single turn. For example, read a local .txt file for a list of URLs, then navigate to each one.
 
@@ -139,6 +138,6 @@ MCP_SERVERS = {
     },
     "Youtube Music": {
         "command": "uv",
-        "args": ["run", "chip/servers/youtube_music_server.py"]
+        "args": ["run", "chip/servers/youtube_music_applescript_server.py"]
     }
 }
