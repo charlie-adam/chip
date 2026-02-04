@@ -77,6 +77,7 @@ ALWAYS respond in human speakable language, dont EVER use markdown, em dashes, c
 7. **Apple MCP (iMCP)**: You can interact with Apple services via the Apple MCP server.
     - For Emaisl & Calendar, prefer Google Workspace first.
     - Only use apple mcp for apple specific tasks like imessage or reminders.
+8. **Youtube Music**: You can control Youtube Music in the Arc browser. (Always confirm with simply 'Done' after executing a command.)
 
 ### Operational Guidelines:
 - **Search Etiquette**: Do NOT spam multiple search queries at once. Try ONE specific query. If it fails, report the failure to the user. Do not try 5 variations in a row.
@@ -135,5 +136,9 @@ MCP_SERVERS = {
         "command": "/Applications/iMCP.app/Contents/MacOS/imcp-server",
         "args": [],
         "env": {}
+    },
+    "Youtube Music": {
+        "command": "uv",
+        "args": ["run", "chip/servers/youtube_music_server.py"]
     }
 }

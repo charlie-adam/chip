@@ -13,6 +13,7 @@ dependencies = [
     "requests>=2.32.3",
     "sounddevice>=0.5.5",
     "websockets>=14.1",
+    "ytmusicapi>=1.11.5",
 ]
 [tool.setuptools]
 packages = ["chip"]
