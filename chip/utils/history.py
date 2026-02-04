@@ -4,13 +4,13 @@ def sanitise_tool_outputs(history):
     """
     Scans history for large Tool Responses and truncates them to save tokens.
     """
-    for i in range(len(history) - 2):
+    for i in range(len(history) - 3):
         message = history[i]
         if message.role == "user":
             for part in message.parts:
                 if part.function_response:
                     current_response = part.function_response.response
-                    if "result" in current_response and len(str(current_response["result"])) > 500:
+                    if "result" in current_response and len(str(current_response["result"])) > 2000:
                         original_len = len(str(current_response["result"]))
                         part.function_response.response = {
                             "result": f"[Output Truncated - Original Length: {original_len} chars]. Context: Tool executed successfully."

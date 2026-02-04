@@ -88,12 +88,15 @@ async def main():
                         # Handle Filler Audio
                         if should_speak and tool_calls:
                             filler_text = None
-                            if loop_index == 0: filler_text = random.choice(config.FILLERS_START)
-                            elif random.random() < 0.2: filler_text = random.choice(config.FILLERS_CONTINUED)
-                            
-                            if filler_text:
-                                print(f"[CHIP (Filler)] {filler_text}")
-                                asyncio.create_task(services.stream_tts(iter([filler_text])))
+                            if any(fn.name == "restart_system" for fn in tool_calls):
+                                filler_text = None
+                            else:
+                                if loop_index == 0: filler_text = random.choice(config.FILLERS_START)
+                                elif random.random() < 0.2: filler_text = random.choice(config.FILLERS_CONTINUED)
+                                
+                                if filler_text:
+                                    print(f"[CHIP (Filler)] {filler_text}")
+                                    asyncio.create_task(services.stream_tts(iter([filler_text])))
                                 
                         # Execute Tools
                         tool_tasks = []

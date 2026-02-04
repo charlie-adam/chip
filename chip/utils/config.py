@@ -36,8 +36,10 @@ FILLERS_START = [
 
 FILLERS_CONTINUED = [
     "Still working on it.", "Processing...", "Just another moment.",
-    "Still going...", "Crunching the numbers...", "Wrapping this up...",
-    "Almost there...", "Digging a bit deeper..."
+    "Still going...", "Almost there...", "Digging a bit deeper...",
+    "Hang tight...", "Getting that for you...", "This is taking a bit longer...",
+    "Thanks for your patience...", "Working on it...", "Let me focus on that...",
+    "Doing my best here..."
 ]
 
 RESTART_TOOL = {
