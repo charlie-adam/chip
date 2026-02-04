@@ -5,6 +5,7 @@ from google.genai import types
 # File paths
 PERSONALITY_FILE = "data/personality.txt"
 SUMMARY_FILE = "data/last_session.txt"
+USER_CUSTOMS = "data/user_customs.txt"
 
 def ensure_files_exist():
     """Creates the files if they don't exist yet."""
@@ -25,6 +26,11 @@ def load_context():
         
     with open(SUMMARY_FILE, "r") as f:
         last_summary = f.read().strip()
+    
+    with open(USER_CUSTOMS, "r") as f:
+        customs = f.read().strip()
+        if customs:
+            personality += f"\n\n### USER CUSTOMS:\n{customs}"
         
     return personality, last_summary
 
