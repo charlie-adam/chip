@@ -15,7 +15,15 @@ class AudioEngine:
         self.samplerate = config.SAMPLE_RATE_TTS
         self.blocksize = config.BLOCK_SIZE 
         
-        self.stream = sd.OutputStream(
+        device_idx = None
+        preferred = getattr(config, "PREFERRED_OUTPUT_DEVICE", None)
+        if preferred:
+            devices = sd.query_devices()
+            for i, d in enumerate(devices):
+                if preferred.lower() in d["name"].lower() and d["max_output_channels"] > 0:
+                    device_idx = i
+                    break
+        self.stream = sd.OutputStream(device=device_idx, 
             samplerate=self.samplerate,
             channels=1,
             dtype='int16',
@@ -137,4 +145,10 @@ class Microphone:
                 await asyncio.sleep(1)
 
 def select_microphone():    
+    preferred = getattr(config, "PREFERRED_INPUT_DEVICE", None)
+    if preferred:
+        devices = sd.query_devices()
+        for i, d in enumerate(devices):
+            if preferred.lower() in d["name"].lower() and d["max_input_channels"] > 0:
+                return i
     return sd.default.device[0]
