@@ -1,7 +1,8 @@
 import json
 import os
 from mcp import StdioServerParameters
-
+from colorama import Fore, Style, init
+init(autoreset=True)
 class ToolManager:
     def __init__(self, server_configs):
         self.server_configs = server_configs
@@ -38,7 +39,7 @@ async def execute_tool(session, fname, fargs):
     if not session:
         return f"Error: Tool {fname} not found."
     try:
-        print(f"[SYSTEM] Calling tool: {fname} with args {fargs}")
+        print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Calling tool: {fname} with args {fargs}{Style.RESET_ALL}")
         res = await session.call_tool(fname, fargs)
         
         full_text = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
@@ -47,9 +48,10 @@ async def execute_tool(session, fname, fargs):
         if len(full_text) > MAX_CHARS:
             truncated_text = full_text[:MAX_CHARS]
             warning_msg = (
-                f"\n\n[SYSTEM ERROR] Output too large ({len(full_text)} characters). "
+                f"\n\n{Fore.RED}[ERROR] Output too large ({len(full_text)} characters). "
                 f"Truncated to first {MAX_CHARS} characters to save costs.\n"
                 "If you need to read this file, use 'head', 'tail', or 'grep' instead of 'cat'."
+                f"{Style.RESET_ALL}"
             )
             return truncated_text + warning_msg
             

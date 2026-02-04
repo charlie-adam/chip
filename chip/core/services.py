@@ -2,7 +2,6 @@ import asyncio
 import json
 import sys
 import httpx
-import websockets
 import re
 import os
 import subprocess
@@ -10,9 +9,14 @@ import time
 import datetime
 from google import genai
 from google.genai import types
+import websockets
+import struct
 
 from chip.utils import config
 from chip.core import state
+
+from colorama import init, Fore, Style
+init(autoreset=True)
 
 client = genai.Client(api_key=config.GEMINI_API_KEY)
 httpx_client = httpx.AsyncClient(timeout=10.0)
@@ -30,7 +34,7 @@ def console_listener(loop):
         except: break
 
 def restart_imcp():
-    print("[SYSTEM] Restarting iMCP to ensure clean connection...")
+    print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Restarting iMCP to ensure clean connection...{Style.RESET_ALL}")
     subprocess.run(["pkill", "-f", "iMCP"], stderr=subprocess.DEVNULL)
     subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
     time.sleep(1)
@@ -41,10 +45,10 @@ def restart_imcp():
             stdout=subprocess.DEVNULL, 
             stderr=subprocess.DEVNULL
         )
-        print("[SYSTEM] iMCP launching... waiting 1s for initialisation...")
+        print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] iMCP launching... waiting 1s for initialisation...{Style.RESET_ALL}")
         time.sleep(1) 
     except Exception as e:
-        print(f"[ERROR] Failed to launch iMCP: {e}")
+        print(f"{Fore.RED}[ERROR] Failed to launch iMCP: {e}{Style.RESET_ALL}")
 
 def _convert_tools_to_gemini(openai_tools):
     if not openai_tools:
@@ -77,7 +81,7 @@ def _get_or_create_cache(system_instruction, tools):
             try:
                 # Verify cache actually exists on server
                 ACTIVE_CACHE = client.caches.get(name=cache_name)
-                print(f"\033[92m[CACHE] Resumed: {ACTIVE_CACHE.name}\033[0m")
+                print(f"{Fore.GREEN}[CACHE] Resumed: {ACTIVE_CACHE.name}{Style.RESET_ALL}")
             except Exception:
                 # Silent fail: Cache expired/deleted. Proceed to create new.
                 ACTIVE_CACHE = None
@@ -91,11 +95,11 @@ def _get_or_create_cache(system_instruction, tools):
             )
             return ACTIVE_CACHE.name
         except Exception:
-            print("[CACHE] Refresh failed. Recreating...")
+            print(f"{Fore.YELLOW}[CACHE] Refresh failed. Recreating...{Style.RESET_ALL}")
             ACTIVE_CACHE = None
 
     try:
-        print("\033[93m[CACHE] Creating new Gemini Cache...\033[0m")
+        print(f"{Fore.YELLOW}[CACHE] Creating new Gemini Cache...{Style.RESET_ALL}")
         ACTIVE_CACHE = client.caches.create(
             model=config.LLM_MODEL,
             config=types.CreateCachedContentConfig(
@@ -105,7 +109,7 @@ def _get_or_create_cache(system_instruction, tools):
                 ttl=ttl_seconds
             )
         )
-        print(f"\033[92m[CACHE] Created: {ACTIVE_CACHE.name}\033[0m")
+        print(f"{Fore.GREEN}[CACHE] Created: {ACTIVE_CACHE.name}{Style.RESET_ALL}")
 
         state._update_state({
             "cache_name": ACTIVE_CACHE.name,
@@ -115,67 +119,92 @@ def _get_or_create_cache(system_instruction, tools):
         return ACTIVE_CACHE.name
 
     except Exception as e:
-        print(f"[ERROR] Cache failed: {e}. Falling back to standard requests.")
+        print(f"{Fore.RED}[ERROR] Cache failed: {e}. Falling back to standard requests.{Style.RESET_ALL}")
         ACTIVE_CACHE = None
         return None
 
 async def start_deepgram_stt():
-    url = f"wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate={config.SAMPLE_RATE_MIC}&model=nova-2&smart_format=true&endpointing=true"
+    # 1. Flux V2 Configuration
+    url = (
+        f"wss://api.deepgram.com/v2/listen?"
+        f"model=flux-general-en&"
+        f"encoding=linear16&"
+        f"sample_rate=48000" 
+    )
+    
     headers = {"Authorization": f"Token {config.DEEPGRAM_API_KEY}"}
-    try:
-        connect = websockets.connect(url, additional_headers=headers)
-    except TypeError:
-        connect = websockets.connect(url, extra_headers=headers)
+    DIGITAL_GAIN = 3.0
+
+    SILENCE_FRAME = b'\x00' * 9600
+
     while True:
         try:
-            print("[SYSTEM] Connecting to Deepgram STT...")
-            async with connect as ws:
-                print("[SYSTEM] Deepgram Connected.")
+            print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Connecting to Deepgram Flux (48kHz)...{Style.RESET_ALL}")
+            
+            async with websockets.connect(url, additional_headers=headers) as ws:
+                print(f"{Fore.GREEN}[SYSTEM] Deepgram Flux Connected.{Style.RESET_ALL}")
+
                 async def sender():
                     while True:
                         try:
-                            data = await asyncio.wait_for(state.mic_queue.get(), timeout=3.0)
+                            # Wait for mic data for up to 0.5 seconds
+                            data = await asyncio.wait_for(state.mic_queue.get(), timeout=0.5)
+                            
+                            # Apply Digital Gain
+                            if DIGITAL_GAIN != 1.0 and len(data) % 2 == 0:
+                                count = len(data) // 2
+                                fmt = f"{count}h"
+                                samples = list(struct.unpack(fmt, data))
+                                boosted = [max(min(int(s * DIGITAL_GAIN), 32767), -32768) for s in samples]
+                                data = struct.pack(fmt, *boosted)
+
                             await ws.send(data)
+                            
                         except asyncio.TimeoutError:
-                            await ws.send(json.dumps({"type": "KeepAlive"}))
+                            # ⚡ FIX: Send actual silent audio bytes, not JSON
+                            # This keeps the VAD active without triggering words
+                            await ws.send(SILENCE_FRAME)
+                            
+                        except Exception:
+                            break
+
                 async def receiver():
-                    buffer = []
-                    last_activity = asyncio.get_event_loop().time()
-                    TURN_TIMEOUT = config.SILENCE_THRESHOLD
-                    async def flush_loop():
-                        nonlocal last_activity
-                        while True:
-                            await asyncio.sleep(0.1)
-                            silence_duration = asyncio.get_event_loop().time() - last_activity
-                            if buffer and silence_duration > TURN_TIMEOUT:
-                                full_text = " ".join(buffer).strip()
-                                buffer.clear()
-                                if full_text:
-                                    sys.stdout.write("\r\033[K")
-                                    print(f"[USER] {full_text}")
-                                    payload = {"text": f"[USER] {full_text}", "source": "voice"}
-                                    await state.input_queue.put(payload)
-                            elif buffer and silence_duration > 0.5:
-                                remaining = round(TURN_TIMEOUT - silence_duration, 1)
-                                sys.stdout.write(f"\r[WAITING {remaining}s] {' '.join(buffer)}")
-                                sys.stdout.flush()
-                    asyncio.create_task(flush_loop())
                     async for msg in ws:
-                        res = json.loads(msg)
-                        if 'channel' in res:
-                            alt = res['channel']['alternatives'][0]
-                            transcript = alt['transcript'].strip()
-                            if transcript:
-                                last_activity = asyncio.get_event_loop().time()
-                                if res.get('is_final'):
-                                    buffer.append(transcript)
-                                else:
-                                    current_text = " ".join(buffer) + " " + transcript
-                                    sys.stdout.write(f"\r[LISTENING] {current_text}")
+                        try:
+                            res = json.loads(msg)
+                            if res.get("type") == "TurnInfo":
+                                event = res.get("event")
+                                transcript = res.get("transcript", "")
+
+                                if event == "StartOfTurn":
+                                    if hasattr(state, 'is_speaking') and state.is_speaking():
+                                        sys.stdout.write(f"{Fore.RED}[INTERRUPT] Stopping TTS...{Style.RESET_ALL}\n")
+                                        while not state.audio_queue.empty():
+                                            try: state.audio_queue.get_nowait()
+                                            except: pass
+                                    # Fallback if function missing
+                                    elif not state.audio_queue.empty():
+                                        while not state.audio_queue.empty():
+                                            try: state.audio_queue.get_nowait()
+                                            except: pass
+
+                                elif event == "Update" and transcript:
+                                    sys.stdout.write(f"\r\033[K{Fore.CYAN}[LISTENING] {transcript}{Style.RESET_ALL}")
                                     sys.stdout.flush()
+
+                                elif event == "EndOfTurn" and transcript:
+                                    sys.stdout.write(f"\r\033[K") 
+                                    print(f"{Fore.GREEN}[USER] {transcript}{Style.RESET_ALL}")
+                                    payload = {"text": f"[USER] {transcript}", "source": "voice"}
+                                    await state.input_queue.put(payload)
+
+                        except Exception as e:
+                            print(f"{Fore.RED}[ERROR] Parse: {e}{Style.RESET_ALL}")
+
                 await asyncio.gather(sender(), receiver())
+
         except Exception as e:
-            print(f"[ERROR] Deepgram Disconnected: {e}. Reconnecting in 2s...")
+            print(f"{Fore.RED}[ERROR] Deepgram Disconnected: {e}. Reconnecting in 2s...{Style.RESET_ALL}")
             await asyncio.sleep(2)
 
 async def stream_tts(text_iterator):
@@ -204,7 +233,7 @@ async def _fetch_audio(text):
                 if chunk:
                     state.audio_queue.put(chunk)
     except Exception as e:
-        print(f"[ERROR] TTS Streaming failed: {e}")
+        print(f"{Fore.RED}[ERROR] TTS Streaming failed: {e}{Style.RESET_ALL}")
     finally:
         state.set_speaking(False)
 
@@ -243,7 +272,7 @@ async def ask_llm_stream(history, system_instruction=None, tools=None):
             u = chunk.usage_metadata
             cached = u.cached_content_token_count if hasattr(u, 'cached_content_token_count') else 0
             new_bits = u.prompt_token_count - cached
-            print(f"\n\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
+            # print(f"\n\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
             printed_usage = True
 
         if chunk.candidates and chunk.candidates[0].content.parts:
@@ -293,6 +322,6 @@ async def ask_llm(history, system_instruction=None, tools=None):
         u = response.usage_metadata
         cached = u.cached_content_token_count if hasattr(u, 'cached_content_token_count') else 0
         new_bits = u.prompt_token_count - cached
-        print(f"\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
+        # print(f"\033[92m[METRICS] Total Context: {u.prompt_token_count} | Cached: {cached} | Billed: {new_bits} | Output: {u.candidates_token_count}\033[0m")
     
     return response

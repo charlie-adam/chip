@@ -12,15 +12,13 @@ from chip.utils import config, tools_handler, history as history_utils
 from chip.core import state, services, context_manager, mcp_connect, routines
 from chip.audio import audio_engine
 
+from colorama import init, Fore, Style
+
 async def main():
     services.restart_imcp()
     
-    mic_id = audio_engine.select_microphone()
     engine = audio_engine.AudioEngine()
-    engine.start() 
-    mic = audio_engine.Microphone()
-    mic.start(mic_id)
-    asyncio.create_task(services.start_deepgram_stt())
+    engine.start()
 
     personality_text, last_summary = context_manager.load_context()
     full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### SETTINGS:\n{personality_text}\n\n### LAST SESSION:\n{last_summary}"
@@ -33,18 +31,24 @@ async def main():
         async with AsyncExitStack() as stack:
             mcp_tools, tool_to_session = await mcp_connect.connect_servers(stack, tm, config.MCP_SERVERS)
             all_tools = base_tools + mcp_tools
-            print(f"[SYSTEM] Ready. Loaded {len(all_tools)} tools.")
+            print(f"{Fore.GREEN}[SYSTEM] Ready. Loaded {len(all_tools)} tools.{Style.RESET_ALL}")
             
             history = await routines.run_startup_routine(
                 services, history, full_system_prompt, all_tools, tool_to_session
             )
+            
+            mic_id = audio_engine.select_microphone()
+            mic = audio_engine.Microphone()
+            mic.start(mic_id)
+            asyncio.create_task(services.start_deepgram_stt())
+
 
             loop = asyncio.get_running_loop()
             threading.Thread(target=services.console_listener, args=(loop,), daemon=True).start()
             services._get_or_create_cache(full_system_prompt, all_tools)
             
             os.system('clear')
-            print(f"[SYSTEM] Chip Awake - {time.strftime('%a %d %b %H:%M:%S %Y')}")
+            print(f"{Fore.CYAN}[SYSTEM] Chip Awake - {time.strftime('%a %d %b %H:%M:%S %Y')}{Style.RESET_ALL}")
 
             while True:
                 input_data = await state.input_queue.get()
@@ -58,7 +62,7 @@ async def main():
                 state.set_processing(True)
                 
                 clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
-                if not user_input.startswith("[USER]"): print(f"[USER (Text)] {clean_text}")
+                if not user_input.startswith("[USER]"): print(f"{Fore.BLUE}[USER (Text)] {clean_text}{Style.RESET_ALL}")
 
                 history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
                 history = history_utils.safe_trim_history(history, max_length=14)
@@ -68,18 +72,18 @@ async def main():
                         full_content_parts = [] 
                         tool_calls = []         
                         
-                        print(f"[CHIP] ", end="", flush=True)
+                        print(f"{Fore.MAGENTA}[CHIP] ", end="", flush=True)
                         
                         async for chunk in services.ask_llm_stream(history, system_instruction=full_system_prompt, tools=all_tools):
                             if chunk["type"] == "text":
                                 text = chunk["content"]
-                                print(text, end="", flush=True)
+                                print(f"{Fore.MAGENTA}{text}{Style.RESET_ALL} ", end="", flush=True)
                                 if should_speak: await services.stream_tts(iter([text])) 
                             elif chunk["type"] == "complete_message":
                                 full_content_parts = chunk["content"]
                                 tool_calls = [p.function_call for p in full_content_parts if p.function_call]
 
-                        print() 
+                        print(Style.RESET_ALL)
                         if full_content_parts:
                             history.append(types.Content(role="model", parts=full_content_parts))
 
@@ -95,7 +99,7 @@ async def main():
                                 elif random.random() < 0.2: filler_text = random.choice(config.FILLERS_CONTINUED)
                                 
                                 if filler_text:
-                                    print(f"[CHIP (Filler)] {filler_text}")
+                                    print(f"{Fore.MAGENTA}[CHIP (Filler)] {filler_text}{Style.RESET_ALL}")
                                     asyncio.create_task(services.stream_tts(iter([filler_text])))
                                 
                         # Execute Tools
@@ -106,7 +110,7 @@ async def main():
                             fname, fargs = fn.name, fn.args
                             
                             if fname == "restart_system":
-                                print("[SYSTEM] Restart initiated...")
+                                print(f"{Fore.CYAN}[SYSTEM] Restart initiated...{Style.RESET_ALL}")
                                 if should_speak: await services.stream_tts(iter(["Rebooting system."]))
                                 subprocess.run(["pkill", "-f", "imcp-server"], stderr=subprocess.DEVNULL)
                                 if history: await context_manager.generate_and_save_summary(history, services)

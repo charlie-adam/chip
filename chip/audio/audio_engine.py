@@ -1,3 +1,4 @@
+from colorama import Fore, Style, init
 import sounddevice as sd
 import numpy as np
 import threading
@@ -6,6 +7,7 @@ import asyncio
 import time
 from chip.core import state
 from chip.utils import config
+init(autoreset=True)
 
 if not hasattr(state, 'last_speech_time'):
     state.last_speech_time = 0
@@ -41,7 +43,7 @@ class AudioEngine:
     def start(self):
         self.running = True
         self.stream.start()
-        print(f"[SYSTEM] Audio Engine Started @ {self.samplerate}Hz")
+        print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Audio Engine Started @ {self.samplerate}Hz{Style.RESET_ALL}")
 
     def _apply_fade(self, audio_array, direction='in'):
         """Smooths the start/end of audio to prevent speaker 'clicks'"""
@@ -140,7 +142,7 @@ class Microphone:
             blocksize=config.BLOCK_SIZE,
             callback=callback
         ):
-            print(f"[SYSTEM] Microphone listening on Device {device_index} @ {config.SAMPLE_RATE_MIC}Hz")
+            print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Microphone listening on Device {device_index} @ {config.SAMPLE_RATE_MIC}Hz{Style.RESET_ALL}")
             while True:
                 await asyncio.sleep(1)
 

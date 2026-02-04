@@ -15,7 +15,7 @@ if not GEMINI_API_KEY or not DEEPGRAM_API_KEY:
     print("ERROR: Please set GEMINI_API_KEY and DEEPGRAM_API_KEY.")
     sys.exit(1)
     
-SAMPLE_RATE_MIC = 16000
+SAMPLE_RATE_MIC = 48000
 SAMPLE_RATE_TTS = 24000
 BLOCK_SIZE = 8192
 LLM_MODEL = "gemini-3-flash-preview"
@@ -109,12 +109,12 @@ MCP_SERVERS = {
             os.path.expanduser("~/mcp-servers/google-workspace/workspace-server/dist/index.js")
         ],
         "env": {
-            "GOOGLE_APPLICATION_CREDENTIALS": os.path.abspath("credentials.json")
+        "GOOGLE_APPLICATION_CREDENTIALS": os.path.abspath("credentials.json")
         }
     },
     "supermemory-mcp": {
         "command": "npx",
-        "args": ["-y", "mcp-remote", "https://mcp.supermemory.ai/mcp"],
+        "args": ["-y", "mcp-remote", "https://mcp.supermemory.ai/mcp", "--transport", "sse-only"],
         "env": {},
         "headers": {
             "Authorization": f"Bearer {SUPERMEMORY_BEARER}"

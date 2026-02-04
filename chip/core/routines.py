@@ -4,6 +4,8 @@ import json
 from google.genai import types
 from chip.utils import config
 from chip.core import state
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 async def run_startup_routine(services, history, system_prompt, all_tools, tool_to_session):
     """
@@ -14,12 +16,12 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
     
     state._update_state({"last_startup": time.time()})
     
-    print(f"[SYSTEM] Last Startup: {time.ctime(last_startup)}")
+    print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Last Startup: {time.ctime(last_startup)}{Style.RESET_ALL}")
     
     if (time.time() - last_startup) <= 3600:
         return history # Skip routine
 
-    print("[SYSTEM] Initiating Startup Routine...")
+    print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Initiating Startup Routine...{Style.RESET_ALL}")
     await services.stream_tts(iter(["Initiating Startup Routine"]))
     
     startup_prompt = (
@@ -47,13 +49,13 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
         text_parts = [p.text for p in candidate.content.parts if p.text]
 
         for text in text_parts:
-            print(f"[CHIP (Startup)] {text}")
+            print(f"{Fore.LIGHTBLACK_EX}[CHIP (Startup)] {text}{Style.RESET_ALL}")
             await services.stream_tts(iter([text]))
         
         if not tool_calls:
             startup_complete = True
             history = [] # Flush startup context
-            print("[SYSTEM] Startup context flushed.")
+            print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Startup context flushed.{Style.RESET_ALL}")
         else:
             response_parts = []
             for fn in tool_calls:
@@ -62,7 +64,7 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
                 res_str = ""
                 if session:
                     try:
-                        print(f"[SYSTEM] Startup Tool: {fname}")
+                        print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Startup Tool: {fname}{Style.RESET_ALL}")
                         res = await session.call_tool(fname, fargs)
                         res_str = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
                     except Exception as e: res_str = f"Error: {e}"

@@ -43,3 +43,7 @@ def set_processing(val):
 def set_speaking(val):
     global IS_SPEAKING
     IS_SPEAKING = val
+
+def is_speaking() -> bool:
+    global IS_SPEAKING
+    return IS_SPEAKING

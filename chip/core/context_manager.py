@@ -1,6 +1,8 @@
 import os
 import asyncio
 from google.genai import types
+from colorama import Fore, Style, init
+init(autoreset=True)
 
 # File paths
 PERSONALITY_FILE = "data/personality.txt"
@@ -35,7 +37,7 @@ def load_context():
     return personality, last_summary
 
 async def generate_and_save_summary(full_history, services_module):
-    print("\n[SYSTEM] Generating session summary...")
+    print(f"\n{Fore.LIGHTBLACK_EX}[SYSTEM] Generating session summary...{Style.RESET_ALL}")
     
     summary_request = "Summarise the key topics, decisions, and user preferences from our conversation above. Keep it concise (under 100 words) so you remember it for next time."
     
@@ -57,9 +59,9 @@ async def generate_and_save_summary(full_history, services_module):
             if summary_text and isinstance(summary_text, str):
                 with open(SUMMARY_FILE, "w") as f:
                     f.write(summary_text)
-                print(f"[SYSTEM] Summary saved: {summary_text[:50]}...")
+                print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Summary saved: {summary_text[:50]}...{Style.RESET_ALL}")
             else:
-                print("[SYSTEM] Skipped: Model returned empty text.")
+                print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Skipped: Model returned empty text.{Style.RESET_ALL}")
                 
     except Exception as e:
-        print(f"[ERROR] Could not save summary: {e}")
+        print(f"{Fore.RED}[ERROR] Could not save summary: {e}{Style.RESET_ALL}")
