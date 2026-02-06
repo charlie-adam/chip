@@ -7,12 +7,11 @@ import subprocess
 import time
 from contextlib import AsyncExitStack
 from google.genai import types
+from colorama import init, Fore, Style
 
 from chip.utils import config, tools_handler, history as history_utils
 from chip.core import state, services, context_manager, mcp_connect, routines
 from chip.audio import audio_engine
-
-from colorama import init, Fore, Style
 
 async def main():
     services.restart_imcp()
@@ -21,7 +20,8 @@ async def main():
     engine.start()
 
     personality_text, last_summary = context_manager.load_context()
-    full_system_prompt = f"{config.SYSTEM_PROMPT}\n\n### SETTINGS:\n{personality_text}\n\n### LAST SESSION:\n{last_summary}"
+    
+    full_system_prompt = config.SYSTEM_PROMPT 
 
     tm = tools_handler.ToolManager(config.MCP_SERVERS)
     base_tools = [config.RESTART_TOOL]
@@ -34,26 +34,35 @@ async def main():
             print(f"{Fore.GREEN}[SYSTEM] Ready. Loaded {len(all_tools)} tools.{Style.RESET_ALL}")
             
             history = await routines.run_startup_routine(
-                services, history, full_system_prompt, all_tools, tool_to_session
+                services, 
+                history, 
+                full_system_prompt, 
+                all_tools, 
+                tool_to_session,
+                personality_text,  # <-- Passed Here
+                last_summary       # <-- Passed Here
             )
             
             mic_id = audio_engine.select_microphone()
             mic = audio_engine.Microphone()
             mic.start(mic_id)
+            
             asyncio.create_task(services.start_deepgram_stt())
-
 
             loop = asyncio.get_running_loop()
             threading.Thread(target=services.console_listener, args=(loop,), daemon=True).start()
+            
             services._get_or_create_cache(full_system_prompt, all_tools)
             
             os.system('clear')
             print(f"{Fore.CYAN}[SYSTEM] Chip Awake - {time.strftime('%a %d %b %H:%M:%S %Y')}{Style.RESET_ALL}")
+            print(f"{Fore.LIGHTBLACK_EX}(Waiting for 'Hey Chip' or text input...){Style.RESET_ALL}")
 
             while True:
                 input_data = await state.input_queue.get()
                 
                 user_input = input_data.get("text", "") if isinstance(input_data, dict) else str(input_data)
+                
                 should_speak = False if isinstance(input_data, dict) and input_data.get("source") == "text" else True
                 if (config.SPEAK_MODE == "always"): should_speak = True
                 if (config.SPEAK_MODE == "never"): should_speak = False
@@ -62,7 +71,8 @@ async def main():
                 state.set_processing(True)
                 
                 clean_text = user_input.replace("[USER] ", "") if user_input.startswith("[USER]") else user_input
-                if not user_input.startswith("[USER]"): print(f"{Fore.BLUE}[USER (Text)] {clean_text}{Style.RESET_ALL}")
+                if not user_input.startswith("[USER]"): 
+                    print(f"{Fore.BLUE}[USER (Text)] {clean_text}{Style.RESET_ALL}")
 
                 history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
                 history = history_utils.safe_trim_history(history, max_length=14)
@@ -89,7 +99,6 @@ async def main():
 
                         if not tool_calls: break
                         
-                        # Handle Filler Audio
                         if should_speak and tool_calls:
                             filler_text = None
                             if any(fn.name == "restart_system" for fn in tool_calls):
@@ -102,7 +111,6 @@ async def main():
                                     print(f"{Fore.MAGENTA}[CHIP (Filler)] {filler_text}{Style.RESET_ALL}")
                                     asyncio.create_task(services.stream_tts(iter([filler_text])))
                                 
-                        # Execute Tools
                         tool_tasks = []
                         tool_names = []
                         
@@ -138,4 +146,7 @@ async def main():
 
 if __name__ == "__main__":
     try: asyncio.run(main())
+    except (RuntimeError, Exception):
+        print(f"{Fore.RED}[ERROR] Unhandled exception: {sys.exc_info()[0]} - {sys.exc_info()[1]}{Style.RESET_ALL}")
+        pass
     except KeyboardInterrupt: print("\n[SYSTEM] Shutdown.")

@@ -1,12 +1,15 @@
-from colorama import Fore, Style, init
-import sounddevice as sd
-import numpy as np
-import threading
-import queue
+import struct
 import asyncio
 import time
+import queue
+import numpy as np
+import sounddevice as sd
+import pvporcupine 
+
+from colorama import Fore, Style, init
 from chip.core import state
 from chip.utils import config
+
 init(autoreset=True)
 
 if not hasattr(state, 'last_speech_time'):
@@ -15,7 +18,7 @@ if not hasattr(state, 'last_speech_time'):
 class AudioEngine:
     def __init__(self):
         self.samplerate = config.SAMPLE_RATE_TTS
-        self.blocksize = config.BLOCK_SIZE 
+        self.blocksize = getattr(config, 'BLOCK_SIZE', 4096)
         
         device_idx = None
         preferred = getattr(config, "PREFERRED_OUTPUT_DEVICE", None)
@@ -25,6 +28,7 @@ class AudioEngine:
                 if preferred.lower() in d["name"].lower() and d["max_output_channels"] > 0:
                     device_idx = i
                     break
+        
         self.stream = sd.OutputStream(device=device_idx, 
             samplerate=self.samplerate,
             channels=1,
@@ -33,25 +37,19 @@ class AudioEngine:
             callback=self._callback
         )
         
-        self.running = False
         self._leftover_data = b''
-        
         self._is_starting_phrase = True
         self._buffer_threshold = 2
         self._has_started_playing = False
 
     def start(self):
-        self.running = True
         self.stream.start()
-        print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Audio Engine Started @ {self.samplerate}Hz{Style.RESET_ALL}")
+        print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Audio Output Started @ {self.samplerate}Hz{Style.RESET_ALL}")
 
     def _apply_fade(self, audio_array, direction='in'):
-        """Smooths the start/end of audio to prevent speaker 'clicks'"""
+        """Prevents popping/clicking at start/end of audio clips."""
         length = len(audio_array)
-        if direction == 'in':
-            ramp = np.linspace(0, 1, length)
-        else:
-            ramp = np.linspace(1, 0, length)
+        ramp = np.linspace(0, 1, length) if direction == 'in' else np.linspace(1, 0, length)
         return (audio_array * ramp).astype(np.int16)
 
     def _callback(self, outdata, frames, time_info, status):
@@ -62,7 +60,6 @@ class AudioEngine:
             if state.audio_queue.qsize() >= self._buffer_threshold:
                 self._has_started_playing = True
             else:
-                # Still buffering... play silence
                 outdata.fill(0)
                 return
 
@@ -79,11 +76,9 @@ class AudioEngine:
                 self._leftover_data = output[bytes_needed:]
                 output = output[:bytes_needed]
             
-            # --- We have audio to play ---
             state.IS_SPEAKING = True
             audio_array = np.frombuffer(output, dtype='int16')
 
-            # Fade In (Start of sentence)
             if self._is_starting_phrase:
                 audio_array = self._apply_fade(audio_array, 'in')
                 self._is_starting_phrase = False
@@ -91,31 +86,38 @@ class AudioEngine:
             outdata[:] = audio_array.reshape(-1, 1)
 
         except queue.Empty:
-            # --- Queue is empty (End of sentence) ---
             if len(output) > 0:
-                # If we have partial data, pad with zeros
                 padding = bytes_needed - len(output)
                 output += b'\x00' * padding
                 outdata[:] = np.frombuffer(output, dtype='int16').reshape(-1, 1)
             else:
-                # COMPLETE SILENCE
                 outdata.fill(0)
                 
                 if state.IS_SPEAKING:
-                    # We JUST finished speaking.
                     state.IS_SPEAKING = False
-                    state.last_speech_time = time.time() # Start the Cooldown Clock
+                    state.last_speech_time = time.time()
                     
-                    # Reset flags for next time
                     self._is_starting_phrase = True
                     self._has_started_playing = False 
 
     def stop(self):
-        self.running = False
         self.stream.stop()
         self.stream.close()
 
 class Microphone:
+    def __init__(self):
+        try:
+            self.porcupine = pvporcupine.create(
+                access_key=config.PICOVOICE_ACCESS_KEY,
+                keywords=["computer"]
+                # keyword_paths=[config.KEYWORD_FILE_PATH] 
+            )
+            self.pcm_buffer = [] 
+            print(f"{Fore.GREEN}[SYSTEM] Wake Word Active: 'Hey Chip'{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"{Fore.RED}[ERROR] Porcupine Init Failed: {e}{Style.RESET_ALL}")
+            self.porcupine = None
+
     def start(self, device_index):
         asyncio.create_task(self._mic_loop(device_index))
 
@@ -123,16 +125,23 @@ class Microphone:
         loop = asyncio.get_running_loop()
         
         def callback(indata, frames, time_info, status):
-            # 1. Check if bot is currently speaking
-            if state.IS_SPEAKING or getattr(state, "IS_PROCESSING", False):
+            if state.IS_SPEAKING:
                 return
 
-            # 2. COOLDOWN CHECK (The Echo Fix)
-            time_since_speech = time.time() - getattr(state, 'last_speech_time', 0)
-            if time_since_speech < 0.6: 
-                return
+            if self.porcupine:
+                pcm_chunk = struct.unpack_from("h" * frames, indata)
+                self.pcm_buffer.extend(pcm_chunk)
+                while len(self.pcm_buffer) >= self.porcupine.frame_length:
+                    frame = self.pcm_buffer[:self.porcupine.frame_length]
+                    self.pcm_buffer = self.pcm_buffer[self.porcupine.frame_length:]
+                    result = self.porcupine.process(frame)
+                    if result >= 0:
+                        print(f"{Fore.YELLOW}[WAKE WORD] Detected!{Style.RESET_ALL}")
+                        state.last_speech_time = time.time() - 1.0
 
-            loop.call_soon_threadsafe(state.mic_queue.put_nowait, indata.tobytes())
+            time_since_active = time.time() - getattr(state, 'last_speech_time', 0)
+            if 1 < time_since_active < 10.0:
+                loop.call_soon_threadsafe(state.mic_queue.put_nowait, indata.tobytes())
 
         with sd.InputStream(
             device=device_index, 
@@ -142,10 +151,9 @@ class Microphone:
             blocksize=config.BLOCK_SIZE,
             callback=callback
         ):
-            print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Microphone listening on Device {device_index} @ {config.SAMPLE_RATE_MIC}Hz{Style.RESET_ALL}")
+            # print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Mic listening on Device {device_index} @ {config.SAMPLE_RATE_MIC}Hz{Style.RESET_ALL}")
             while True:
-                await asyncio.sleep(1)
-
+                await asyncio.sleep(1) 
 def select_microphone():    
     preferred = getattr(config, "PREFERRED_INPUT_DEVICE", None)
     if preferred:

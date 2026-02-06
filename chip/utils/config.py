@@ -9,14 +9,18 @@ load_dotenv()
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SUPERMEMORY_BEARER = os.getenv("SUPERMEMORY_BEARER", "")
+PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
+
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.abspath("credentials.json")
 
-if not GEMINI_API_KEY or not DEEPGRAM_API_KEY:
-    print("ERROR: Please set GEMINI_API_KEY and DEEPGRAM_API_KEY.")
+if not GEMINI_API_KEY or not DEEPGRAM_API_KEY or not PICOVOICE_ACCESS_KEY:
+    print("ERROR: Please set GEMINI_API_KEY, DEEPGRAM_API_KEY, and PICOVOICE_ACCESS_KEY.")
     sys.exit(1)
     
-SAMPLE_RATE_MIC = 48000
+# SAMPLE_RATE_MIC = 48000
+SAMPLE_RATE_MIC = 16000
 SAMPLE_RATE_TTS = 24000
+KEYWORD_FILE_PATH = "hey_chip_ww.ppn"
 BLOCK_SIZE = 8192
 LLM_MODEL = "gemini-3-flash-preview"
 TTS_VOICE = "aura-2-luna-en"
@@ -67,6 +71,8 @@ Your spoken responses (via TTS) should be brief and helpful. Avoid long technica
     - **CRITICAL**: Use this `search_web` tool for factual questions. DO NOT use the terminal (curl/wget) to scrape websites, as it will fail.
 2. **Google Workspace**: You can access Google Docs, Calendar, and Drive to read and write documents, calendars, and manage files.
 3. **Memory (Knowledge Graph)**: You have a graph-based memory. 
+    - If 1 is not important at all, and 10 is extremely important, store information in memory if it is a 3 or above in importance.
+    - Be generous with storing and recalling from memory, as it helps you build a better understanding of the user's preferences and needs over time.
 4. **Terminal**: You can execute shell commands to inspect the system, create files & folders, or run scripts. 
     - Confirm before ever running destructive commands (rm, mv, dd, etc).
     - **Prohibited**: Do not use the terminal for web searching or scraping.

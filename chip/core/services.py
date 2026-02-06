@@ -124,12 +124,11 @@ def _get_or_create_cache(system_instruction, tools):
         return None
 
 async def start_deepgram_stt():
-    # 1. Flux V2 Configuration
     url = (
         f"wss://api.deepgram.com/v2/listen?"
         f"model=flux-general-en&"
         f"encoding=linear16&"
-        f"sample_rate=48000" 
+        f"sample_rate={config.SAMPLE_RATE_MIC}" 
     )
     
     headers = {"Authorization": f"Token {config.DEEPGRAM_API_KEY}"}
@@ -139,8 +138,7 @@ async def start_deepgram_stt():
 
     while True:
         try:
-            print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Connecting to Deepgram Flux (48kHz)...{Style.RESET_ALL}")
-            
+            # print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Connecting to Deepgram Flux ({config.SAMPLE_RATE_MIC}Hz)...{Style.RESET_ALL}")
             async with websockets.connect(url, additional_headers=headers) as ws:
                 print(f"{Fore.GREEN}[SYSTEM] Deepgram Flux Connected.{Style.RESET_ALL}")
 
