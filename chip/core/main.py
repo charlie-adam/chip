@@ -90,6 +90,7 @@ async def main():
                 user_input = current_text.strip()
                 if not user_input: continue
 
+                state.last_speech_time = time.time()
                 should_speak = False if source == "text" else True
                 if (config.SPEAK_MODE == "always"): should_speak = True
                 if (config.SPEAK_MODE == "never"): should_speak = False
@@ -129,24 +130,26 @@ async def main():
                         if tool_calls:
                             if should_speak and not any(fn.name == "restart_system" for fn in tool_calls):
                                 try:
-                                    base_path = os.path.dirname(os.path.abspath(__file__)) # chip/core
-                                    root_path = os.path.dirname(os.path.dirname(base_path)) # project root
+                                    base_path = os.path.dirname(os.path.abspath(__file__))
+                                    root_path = os.path.dirname(os.path.dirname(base_path))
                                     sound_path = os.path.join(root_path, "sounds", "thinking.mp3")
                                     
-                                    if sys.platform == "darwin":
-                                        player = "afplay"
+                                    player = "afplay" if sys.platform == "darwin" else "play"
 
                                     if os.path.exists(sound_path):
                                         subprocess.Popen([player, sound_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                    else:
-                                        print(f"{Fore.RED}[ERROR] Sound missing at: {sound_path}{Style.RESET_ALL}")
                                 except Exception as e:
                                     print(f"[ERROR] Sound failed: {e}")
 
-                                # Filler Text
                                 filler_text = None
-                                if loop_index == 0: filler_text = random.choice(config.FILLERS_START)
-                                elif random.random() < 0.2: filler_text = random.choice(config.FILLERS_CONTINUED)
+                                first_tool = tool_calls[0].name
+                                
+                                if loop_index == 0:
+                                    filler_text = config.TOOL_SPECIFIC_FILLERS.get(first_tool)
+                                    if not filler_text:
+                                        filler_text = random.choice(config.FILLERS_START)
+                                elif random.random() < 0.3:
+                                    filler_text = random.choice(config.FILLERS_CONTINUED)
                                 
                                 if filler_text:
                                     print(f"{Fore.MAGENTA}[CHIP (Filler)] {filler_text}{Style.RESET_ALL}")

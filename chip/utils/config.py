@@ -33,18 +33,46 @@ PREFERRED_INPUT_DEVICE = 'MacBook Air Microphone'
 PREFERRED_OUTPUT_DEVICE = 'Charlie’s AirPods'
 HISTORY_MAX_LENGTH = 40
 
+TOOL_SPECIFIC_FILLERS = {
+    "search_web": "Checking the web for you.",
+    "sequentialthinking": "Let me think through this step by step.",
+    "capture_take_picture": "Opening the camera now.",
+    "capture_take_screenshot": "Taking a screenshot.",
+    "contacts_search": "Looking through your contacts.",
+    "location_current": "Checking your current location.",
+    "maps_search": "Looking that up on the map.",
+    "maps_directions": "Getting directions for you.",
+    "messages_fetch": "Checking your messages.",
+    "reminders_fetch": "Looking at your reminders.",
+    "weather_current": "Checking the weather.",
+    "gmail_search": "Searching your emails.",
+    "gmail_send": "Sending that email now.",
+    "gmail_createDraft": "Creating a draft for you.",
+    "gmail_listLabels": "Checking your email folders.",
+    "calendar_listEvents": "Checking your calendar.",
+    "calendar_createEvent": "Adding that to your calendar.",
+    "calendar_findFreeTime": "Looking for a gap in your schedule.",
+    "drive_search": "Searching your Google Drive.",
+    "docs_create": "Creating a new document.",
+    "sheets_getText": "Reading the spreadsheet.",
+    "execute_command": "Running that command in the terminal.",
+    "play_song": "Queueing up that song.",
+    "play_playlist": "Starting your playlist.",
+    "control_playback": "Adjusting the music.",
+    "what_is_playing": "Checking the current track.",
+    "memory": "Saving this to my memory.",
+    "recall": "Let me recall that.",
+    "whoAmI": "Let me check my profile data."
+}
+
 FILLERS_START = [
-    "Let me check.", "One moment.", "Just a second.", 
-    "Checking now.", "On it.", "I'll take care of that.", 
-    "Let me see.", "Right away."
+    "On it.", "Just a moment.", "Checking that for you.", 
+    "I'll take a look.", "One second.", "Right away."
 ]
 
 FILLERS_CONTINUED = [
-    "Still working on it.", "Processing...", "Just another moment.",
-    "Still going...", "Almost there...", "Digging a bit deeper...",
-    "Hang tight...", "Getting that for you...", "This is taking a bit longer...",
-    "Thanks for your patience...", "Working on it...", "Let me focus on that...",
-    "Doing my best here..."
+    "Still working on it...", "Just a bit more searching...", 
+    "Processing the results...", "Almost there.", "Hang tight."
 ]
 
 RESTART_TOOL = {

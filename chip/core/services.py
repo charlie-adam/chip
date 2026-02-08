@@ -138,17 +138,13 @@ async def start_deepgram_stt():
 
     while True:
         try:
-            # print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Connecting to Deepgram Flux ({config.SAMPLE_RATE_MIC}Hz)...{Style.RESET_ALL}")
             async with websockets.connect(url, additional_headers=headers) as ws:
-                print(f"{Fore.GREEN}[SYSTEM] Deepgram Flux Connected.{Style.RESET_ALL}")
 
                 async def sender():
                     while True:
                         try:
-                            # Wait for mic data for up to 0.5 seconds
                             data = await asyncio.wait_for(state.mic_queue.get(), timeout=0.5)
                             
-                            # Apply Digital Gain
                             if DIGITAL_GAIN != 1.0 and len(data) % 2 == 0:
                                 count = len(data) // 2
                                 fmt = f"{count}h"
@@ -159,8 +155,6 @@ async def start_deepgram_stt():
                             await ws.send(data)
                             
                         except asyncio.TimeoutError:
-                            # ⚡ FIX: Send actual silent audio bytes, not JSON
-                            # This keeps the VAD active without triggering words
                             await ws.send(SILENCE_FRAME)
                             
                         except Exception:

@@ -94,9 +94,9 @@ class AudioEngine:
                 
                 if state.IS_SPEAKING:
                     state.IS_SPEAKING = False
-                    
+                    state.last_speech_time = time.time() 
                     self._is_starting_phrase = True
-                    self._has_started_playing = False 
+                    self._has_started_playing = False
 
     def stop(self):
         self.stream.stop()
