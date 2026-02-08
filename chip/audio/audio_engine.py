@@ -47,7 +47,6 @@ class AudioEngine:
         print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Audio Output Started @ {self.samplerate}Hz{Style.RESET_ALL}")
 
     def _apply_fade(self, audio_array, direction='in'):
-        """Prevents popping/clicking at start/end of audio clips."""
         length = len(audio_array)
         ramp = np.linspace(0, 1, length) if direction == 'in' else np.linspace(1, 0, length)
         return (audio_array * ramp).astype(np.int16)
@@ -95,7 +94,6 @@ class AudioEngine:
                 
                 if state.IS_SPEAKING:
                     state.IS_SPEAKING = False
-                    state.last_speech_time = time.time()
                     
                     self._is_starting_phrase = True
                     self._has_started_playing = False 
@@ -137,10 +135,13 @@ class Microphone:
                     result = self.porcupine.process(frame)
                     if result >= 0:
                         print(f"{Fore.YELLOW}[WAKE WORD] Detected!{Style.RESET_ALL}")
-                        state.last_speech_time = time.time() - 1.0
+                        # Set to 1s ago to capture the "Hey Chip" audio context if needed, 
+                        # or set to exactly now.
+                        state.last_speech_time = time.time()
 
             time_since_active = time.time() - getattr(state, 'last_speech_time', 0)
-            if 1 < time_since_active < 10.0:
+            
+            if time_since_active < 10.0:
                 loop.call_soon_threadsafe(state.mic_queue.put_nowait, indata.tobytes())
 
         with sd.InputStream(
@@ -151,9 +152,9 @@ class Microphone:
             blocksize=config.BLOCK_SIZE,
             callback=callback
         ):
-            # print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Mic listening on Device {device_index} @ {config.SAMPLE_RATE_MIC}Hz{Style.RESET_ALL}")
             while True:
                 await asyncio.sleep(1) 
+
 def select_microphone():    
     preferred = getattr(config, "PREFERRED_INPUT_DEVICE", None)
     if preferred:

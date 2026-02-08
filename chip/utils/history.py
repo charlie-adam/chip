@@ -17,20 +17,11 @@ def sanitise_tool_outputs(history):
                         }
     return history
 
-def safe_trim_history(history, max_length=14):
-    """
-    Trims history but ensures we always start with a clean User message.
-    """
+def safe_trim_history(history, max_length=30):
     if len(history) <= max_length:
         return history
-
-    start_index = len(history) - max_length
-    while start_index < len(history):
-        message = history[start_index]
-        if message.role == "user":
-            is_tool_response = any(part.function_response for part in message.parts)
-            if not is_tool_response:
-                return history[start_index:]
-        start_index += 1
-
-    return history[-2:]
+    trimmed = history[-max_length:]
+    if trimmed and trimmed[0].role == "model":
+        trimmed = trimmed[1:]
+        
+    return trimmed
