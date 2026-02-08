@@ -29,7 +29,7 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
             f"{context_block}\n"
             f"SYSTEM QUICK RECALL initiated at {config.TIME} on {config.DATE}. "
             "1. Use the 'recall' tool to check for any immediate 'active projects' or 'current focus' in my memory to ensure you are up to date."
-            "2. Synthesize that result with the context above into a warm, short spoken greeting."
+            "2. Synthesize that result with the context above into a warm, very short spoken greeting. (don't tell the user that you're ready to assist or anything similar)"
         )
         
         history.append(types.Content(role="user", parts=[types.Part.from_text(text=startup_prompt)]))

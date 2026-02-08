@@ -109,8 +109,8 @@ class Microphone:
         try:
             self.porcupine = pvporcupine.create(
                 access_key=config.PICOVOICE_ACCESS_KEY,
-                keywords=["computer"]
-                # keyword_paths=[config.KEYWORD_FILE_PATH] 
+                # keywords=["computer"]
+                keyword_paths=[config.KEYWORD_FILE_PATH] 
             )
             self.pcm_buffer = [] 
             print(f"{Fore.GREEN}[SYSTEM] Wake Word Active: 'Hey Chip'{Style.RESET_ALL}")
