@@ -75,7 +75,7 @@ async def main():
                     print(f"{Fore.BLUE}[USER (Text)] {clean_text}{Style.RESET_ALL}")
 
                 history.append(types.Content(role="user", parts=[types.Part.from_text(text=clean_text)]))
-                history = history_utils.safe_trim_history(history, max_length=14)
+                history = history_utils.safe_trim_history(history, max_length=config.HISTORY_MAX_LENGTH)
 
                 try:
                     for loop_index in range(config.MAX_LLM_TURNS): 

@@ -31,6 +31,7 @@ CACHE_SECONDS = 86400
 SPEAK_MODE = "always" #always, never, dynamic
 PREFERRED_INPUT_DEVICE = 'MacBook Air Microphone' 
 PREFERRED_OUTPUT_DEVICE = 'Charlie’s AirPods'
+HISTORY_MAX_LENGTH = 14
 
 FILLERS_START = [
     "Let me check.", "One moment.", "Just a second.", 

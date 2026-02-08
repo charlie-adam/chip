@@ -28,15 +28,16 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
         startup_prompt = (
             f"{context_block}\n"
             f"SYSTEM QUICK RECALL initiated at {config.TIME} on {config.DATE}. "
-            "Use your memory to recall general information about the user"
-            "Synthesize this recall and the context provided into a warm, short spoken greeting to the user to show that you have recalled the context. Do NOT access Google Calendar or Emails since we just want a quick recall."
+            "1. Use the 'recall' tool to check for any immediate 'active projects' or 'current focus' in my memory to ensure you are up to date."
+            "2. Synthesize that result with the context above into a warm, short spoken greeting."
         )
         
         history.append(types.Content(role="user", parts=[types.Part.from_text(text=startup_prompt)]))
         
         short_startup_complete = False
         startup_turns = 0
-        while not short_startup_complete and startup_turns < 3:
+        
+        while not short_startup_complete and startup_turns < 5:
             startup_turns += 1
             response = await services.ask_llm(history, system_instruction=system_prompt, tools=all_tools)
             if not response.candidates: break
@@ -44,15 +45,33 @@ async def run_startup_routine(services, history, system_prompt, all_tools, tool_
             candidate = response.candidates[0]
             history.append(candidate.content)
             
+            tool_calls = [p.function_call for p in candidate.content.parts if p.function_call]
             text_parts = [p.text for p in candidate.content.parts if p.text]
 
             for text in text_parts:
                 print(f"{Fore.MAGENTA}[CHIP] {text}{Style.RESET_ALL}")
                 await services.stream_tts(iter([text]))
             
-            if not any(p.function_call for p in candidate.content.parts):
+            if not tool_calls:
                 short_startup_complete = True
                 print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Quick Recall complete.{Style.RESET_ALL}")
+            else:
+                response_parts = []
+                for fn in tool_calls:
+                    fname, fargs = fn.name, fn.args
+                    session = tool_to_session.get(fname)
+                    res_str = ""
+                    if session:
+                        try:
+                            print(f"{Fore.LIGHTBLACK_EX}[SYSTEM] Quick Recall Tool: {fname}{Style.RESET_ALL}")
+                            res = await session.call_tool(fname, fargs)
+                            res_str = "".join([c.text if hasattr(c, 'text') else str(c) for c in res.content])
+                        except Exception as e: res_str = f"Error: {e}"
+                    else: res_str = f"Error: Tool {fname} not found."
+                    response_parts.append(types.Part.from_function_response(name=fname, response={"result": res_str}))
+                
+                history.append(types.Content(role="user", parts=response_parts))
+        
         return history
     
     # PROCEED: Full Startup Routine (Occurs if > 1 hour)
