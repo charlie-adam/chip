@@ -122,7 +122,12 @@ class Microphone:
     async def _mic_loop(self, device_index):
         loop = asyncio.get_running_loop()
         
+        # This variable tracks the "silence" window
+        ignore_audio_until = 0 
+        
         def callback(indata, frames, time_info, status):
+            nonlocal ignore_audio_until 
+
             if state.IS_SPEAKING:
                 return
 
@@ -135,14 +140,17 @@ class Microphone:
                     result = self.porcupine.process(frame)
                     if result >= 0:
                         print(f"{Fore.YELLOW}[WAKE WORD] Detected!{Style.RESET_ALL}")
-                        # Set to 1s ago to capture the "Hey Chip" audio context if needed, 
-                        # or set to exactly now.
+                        
                         state.last_speech_time = time.time()
+                        
+                        ignore_audio_until = time.time() + 0.7
+                        return
 
             time_since_active = time.time() - getattr(state, 'last_speech_time', 0)
             
             if time_since_active < 10.0:
-                loop.call_soon_threadsafe(state.mic_queue.put_nowait, indata.tobytes())
+                if time.time() > ignore_audio_until:
+                    loop.call_soon_threadsafe(state.mic_queue.put_nowait, indata.tobytes())
 
         with sd.InputStream(
             device=device_index, 
@@ -153,13 +161,14 @@ class Microphone:
             callback=callback
         ):
             while True:
-                await asyncio.sleep(1) 
-
+                await asyncio.sleep(1)
+                
 def select_microphone():    
     preferred = getattr(config, "PREFERRED_INPUT_DEVICE", None)
     if preferred:
         devices = sd.query_devices()
         for i, d in enumerate(devices):
             if preferred.lower() in d["name"].lower() and d["max_input_channels"] > 0:
+                print(f"{Fore.GREEN}[SYSTEM] Selected Microphone: {d['name']}{Style.RESET_ALL}")
                 return i
     return sd.default.device[0]

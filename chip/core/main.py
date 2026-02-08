@@ -173,11 +173,18 @@ async def main():
                                 tool_tasks.append(tools_handler.execute_tool(session, fname, fargs))
 
                             if tool_tasks:
-                                results = await asyncio.gather(*tool_tasks)
-                                tool_outputs = [
-                                    types.Part.from_function_response(name=tool_names[i], response={"result": res})
-                                    for i, res in enumerate(results)
-                                ]
+                                try:
+                                    results = await asyncio.gather(*tool_tasks)
+                                    tool_outputs = [
+                                        types.Part.from_function_response(name=tool_names[i], response={"result": res})
+                                        for i, res in enumerate(results)
+                                    ]
+                                except Exception as e:
+                                    print(f"{Fore.RED}[ERROR] Tool Execution Failed: {e}{Style.RESET_ALL}")
+                                    tool_outputs = [
+                                        types.Part.from_function_response(name=name, response={"error": f"Tool execution failed: {str(e)}"})
+                                        for name in tool_names
+                                    ]
                                 history.append(types.Content(role="user", parts=tool_outputs))
                                 history = history_utils.sanitise_tool_outputs(history)
 
